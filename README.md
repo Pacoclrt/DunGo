@@ -88,7 +88,7 @@ Chaque étage est une suite de salles. La dernière salle cache un **boss**, et 
 | 2 · Les Cryptes Englouties | **Mor'Vath**, la Liche | Vole votre mana |
 | 3 · L'Antre d'Ignarok | **Ignarok**, le dragon | Crache du feu |
 
-Certaines salles cachent une **fontaine** (qui soigne) ou un **sphinx** (une énigme facile : bonne réponse = récompense, mauvaise = un monstre). Entre deux salles, vous pouvez remonter au camp, mais l'étage recommencera du début.
+Certaines salles cachent un **sphinx** : une énigme facile, bonne réponse = récompense, mauvaise = un monstre. Entre deux salles, vous pouvez remonter au camp, mais l'étage recommencera du début.
 
 ### Les combats
 
@@ -105,10 +105,6 @@ Vous jouez toujours en premier : **Attaquer**, lancer un **Sort** (coûte du man
 2. Acceptez une **mission** avant de partir.
 3. Remontez au camp si vos PV sont bas.
 4. Gardez des **potions** pour les boss !
-
-### 🧪 Mode test
-
-Appelez votre héros **`test`** : PV et mana infinis, 999 999 Y-Coins, attaque à 999 et les 3 étages débloqués.
 
 ---
 

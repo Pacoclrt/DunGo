@@ -1,45 +1,38 @@
 package main
 
-// Monster décrit un adversaire. Les valeurs de base vivent dans bestiary ;
-// newMonster en renvoie une copie, si bien qu'un combat ne modifie jamais
-// le bestiaire lui-même.
 type Monster struct {
+	Kind       string // clé dans le bestiaire : « wolf », « dragon »…
 	Name       string
-	MaxHP      int
 	HP         int
+	MaxHP      int
 	Attack     int
 	XP         int
 	Gold       int
-	Drop       string
-	DropChance int    // probabilité du butin, en %
+	Drop       string // objet laissé après la victoire
+	DropChance int    // en %
 	Effect     string // infligé par l'attaque puissante
-	Hit        string // verbe du journal de combat : « Loup des cavernes vous mord »
+	Hit        string // « vous mord », « vous écrase »…
 	Art        string
 	Cry        string
 	IsBoss     bool
-	// Pattern décide de l'attaque du tour. Nil = schéma commun (attaque
-	// puissante tous les 3 tours).
-	Pattern func(*Monster, *Character, int)
-	// Les couleurs ne sont pas dans le bestiaire : un monstre prend celles
-	// du lieu où il apparaît (voir floors).
-	Color   string
-	Colors  []string // dégradé de l'entrée en scène des boss
-	Enraged bool
-	Burning int
+	Color      string // la couleur de l'étage où il apparaît
+	Enraged    bool
+	Burning    int
 }
 
 var bestiary = map[string]Monster{
-	"training_goblin": {Name: "Gobelin d'entraînement", MaxHP: 40, Attack: 5, XP: 12, Gold: 2,
-		Hit: "vous tapote", Art: artGoblin, Cry: "Sergent Grol a dit pas taper trop fort…"},
+	"training_goblin": {Name: "Gobelin d'entraînement", MaxHP: 40, Attack: 5,
+		Hit: "vous tapote", Art: artGoblin},
+
 	"goblin": {Name: "Gobelin chapardeur", MaxHP: 30, Attack: 5, XP: 16, Gold: 6,
 		Drop: ItemHealthPotion, DropChance: 20, Hit: "vous pique avec une fourchette", Art: artGoblin,
 		Cry: "Toi donner Y-Coins ! Moi donner coups !"},
 	"wolf": {Name: "Loup des cavernes", MaxHP: 28, Attack: 6, XP: 18, Gold: 3,
 		Drop: ItemWolfFur, DropChance: 75, Effect: EffectBleed, Hit: "vous mord", Art: artWolf,
-		Cry: "Grrrrr… (il n'a clairement pas envie de jouer à la baballe)"},
+		Cry: "Grrrrr… (il n'a pas envie de jouer à la baballe)"},
 	"raven": {Name: "Corbeau funeste", MaxHP: 18, Attack: 4, XP: 11, Gold: 2,
 		Drop: ItemRavenFeather, DropChance: 85, Hit: "vous picore le crâne", Art: artRaven,
-		Cry: "CROÂ ! CROÂÂÂ ! (traduction : « donne ton goûter »)"},
+		Cry: "CROÂ ! CROÂÂÂ !"},
 	"boar": {Name: "Sanglier furieux", MaxHP: 42, Attack: 7, XP: 24, Gold: 4,
 		Drop: ItemBoarLeather, DropChance: 75, Hit: "vous charge", Art: artBoar,
 		Cry: "GROUIIIK ! (il gratte le sol et fonce)"},
@@ -55,26 +48,25 @@ var bestiary = map[string]Monster{
 
 	"goblin_king": {Name: "Grukk, le Roi Gobelin", MaxHP: 110, Attack: 9, XP: 120, Gold: 60,
 		Drop: ItemFireballBook, DropChance: 100, Hit: "vous assomme avec son sceptre", Art: artGoblinKing,
-		IsBoss: true, Pattern: goblinKingPattern,
-		Cry: "QUI OSE ENTRER DANS MON ROYAUME ? GARDES ! GAAARDES ! … Ils sont en pause ?"},
+		IsBoss: true, Cry: "QUI OSE ENTRER DANS MON ROYAUME ? GARDES ! GAAARDES !"},
 	"lich": {Name: "Mor'Vath, la Liche", MaxHP: 150, Attack: 13, XP: 220, Gold: 100,
 		Drop: ItemManaPotion, DropChance: 100, Effect: EffectWeaken, Hit: "vous glace les os", Art: artLich,
-		IsBoss: true, Pattern: lichPattern,
-		Cry: "Ton mana… Donne-le-moi… Le mien est périmé depuis trois siècles…"},
+		IsBoss: true, Cry: "Ton mana… Donne-le-moi… Le mien est périmé depuis trois siècles…"},
 	"dragon": {Name: "Ignarok, le dragon", MaxHP: 220, Attack: 12, XP: 400, Gold: 150,
 		Effect: EffectBurn, Hit: "vous griffe", Art: artDragon,
-		IsBoss: true, Pattern: dragonPattern,
-		Cry: "QUI OSE INTERROMPRE MA SIESTE ? JE VAIS TE TRANSFORMER EN BROCHETTE !"},
+		IsBoss: true, Cry: "QUI OSE INTERROMPRE MA SIESTE ? JE VAIS TE TRANSFORMER EN BROCHETTE !"},
 }
 
-// newMonster fabrique un monstre neuf, à pleine vie, adapté à la difficulté.
+// newMonster renvoie une copie du monstre du bestiaire, à pleine vie et
+// adaptée à la difficulté. Le bestiaire lui-même n'est jamais modifié.
 func newMonster(kind, difficulty string) *Monster {
 	m := bestiary[kind]
 	level := difficultyOf(difficulty)
+	m.Kind = kind
 	m.MaxHP = m.MaxHP * level.Power / 100
-	m.Attack = max(1, m.Attack*level.Power/100)
-	m.Gold = m.Gold * level.Reward / 100
-	m.XP = m.XP * level.Reward / 100
 	m.HP = m.MaxHP
+	m.Attack = max(1, m.Attack*level.Power/100)
+	m.XP = m.XP * level.Reward / 100
+	m.Gold = m.Gold * level.Reward / 100
 	return &m
 }

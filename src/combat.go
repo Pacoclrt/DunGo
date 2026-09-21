@@ -6,53 +6,34 @@ import (
 	"strings"
 )
 
-// Issues possibles d'un combat.
 const (
 	Victory = "victoire"
 	Defeat  = "défaite"
 	Fled    = "fuite"
 )
 
-// Spell décrit un sort : son coût, ses dégâts et l'effet qu'il ajoute.
 type Spell struct {
 	Cost        int
 	Description string
-	Damage      int // 0 pour un sort de soutien
+	Damage      int
 	Art         string
 	Colors      []string
-	Extra       func(*Character, *Monster) // effet en plus des dégâts
 }
 
 var spells = map[string]Spell{
-	SpellPunch: {Cost: 5, Description: "8 dégâts", Damage: 8,
-		Art: artFist, Colors: []string{Orange}},
-	SpellFireball: {Cost: 15, Description: "18 dégâts + brûlure", Damage: 18,
-		Art: artFireball, Colors: fireColors, Extra: castBurn},
-	SpellSilverArrow: {Cost: 8, Description: "13 dégâts", Damage: 13,
-		Art: artArrow, Colors: stoneColors},
-	SpellSecondWind: {Cost: 10, Description: "rend 25 PV et soigne les saignements et brûlures",
-		Art: artHeal, Colors: []string{Green}, Extra: castSecondWind},
-	SpellStoneSkin: {Cost: 8, Description: "dégâts reçus ÷ 2 pendant 2 attaques",
-		Art: artShield, Colors: stoneColors, Extra: castStoneSkin},
+	SpellPunch:       {5, "8 dégâts", 8, artFist, []string{Orange}},
+	SpellFireball:    {15, "18 dégâts + brûlure", 18, artFireball, fireColors},
+	SpellSilverArrow: {8, "13 dégâts", 13, artArrow, stoneColors},
+	SpellSecondWind:  {10, "rend 25 PV et soigne saignement et brûlure", 0, artHeal, []string{Green}},
+	SpellStoneSkin:   {8, "dégâts reçus ÷ 2 pendant 2 coups", 0, artShield, stoneColors},
 }
 
-func castBurn(c *Character, m *Monster) {
-	m.Burning = 3
-	warn("%s prend feu ! (-5 PV par tour pendant 3 tours)", m.Name)
-}
-
-func castSecondWind(c *Character, m *Monster) {
-	c.HP = min(c.HP+25, c.MaxHP)
-	c.Bleeding, c.Burning = 0, 0
-	success("+25 PV, et plus aucun bobo. Ça va mieux !")
-}
-
-func castStoneSkin(c *Character, m *Monster) {
-	c.StoneSkin = 2
-	success("Votre peau devient pierre : les 2 prochains coups font moitié moins mal.")
-}
-
-// ------------------------------------------------------------------ arène
+const (
+	EffectBleed  = "saignement"
+	EffectBurn   = "brûlure"
+	EffectStun   = "étourdissement"
+	EffectWeaken = "affaiblissement"
+)
 
 func trainingFight(c *Character) {
 	clearScreen()
@@ -60,95 +41,85 @@ func trainingFight(c *Character) {
 	banner("L'ENTRAÎNEMENT", Gold)
 	say("Sergent Grol", Gold, "Mon gobelin cogne mou, mais il cogne. Ici, pas de risque… et pas de butin !")
 	pause()
+
 	m := newMonster("training_goblin", "")
 	m.Color = Gold
-	// Un combat pour de faux : on ressort de l'arène comme on y est entré.
-	hp, mana := c.HP, c.Mana
+	hpBefore := c.HP
+	manaBefore := c.Mana
 	fight(c, m, true)
-	c.HP, c.Mana = hp, mana
+	c.HP = hpBefore
+	c.Mana = manaBefore
 }
 
-// ----------------------------------------------------------------- combat
-
-// fight enchaîne les tours jusqu'à la victoire, la défaite ou la fuite.
-// Le héros joue toujours en premier, puis le monstre riposte.
+// fight enchaîne les tours : le héros joue, puis le monstre, puis les effets.
 func fight(c *Character, m *Monster, training bool) string {
 	clearEffects(c)
-	defer clearEffects(c)
-
 	for turn := 1; ; turn++ {
 		clearScreen()
 		showFight(c, m, turn)
-		if characterTurn(c, m, training) {
+
+		fled := characterTurn(c, m, training)
+		if fled {
 			return Fled
 		}
-		if result := fightOver(c, m, training); result != "" {
-			return result
+		if m.HP > 0 {
+			monsterTurn(m, c, turn)
 		}
-		monsterTurn(m, c, turn)
-		if result := fightOver(c, m, training); result != "" {
-			return result
+		if m.HP > 0 && c.HP > 0 {
+			updateEffects(c, m)
 		}
-		updateEffects(c, m)
-		if result := fightOver(c, m, training); result != "" {
-			return result
+
+		if m.HP <= 0 {
+			return winFight(c, m, training)
+		}
+		if c.HP <= 0 {
+			return loseFight(c, training)
 		}
 		pause()
 	}
 }
 
-func fightOver(c *Character, m *Monster, training bool) string {
-	switch {
-	case m.HP <= 0:
-		return winFight(c, m, training)
-	case c.HP <= 0:
-		return loseFight(c, training)
-	}
-	return ""
-}
-
-// showFight redessine l'écran de combat : monstre, jauges et effets.
 func showFight(c *Character, m *Monster, turn int) {
 	fmt.Printf("  %s── Tour %d %s%s\n", DarkGray, turn, strings.Repeat("─", 50), Reset)
 	printArt(m.Art, m.Color)
 
-	fmt.Printf("  %s%s%s", Bold+m.Color, m.Name, Reset)
+	fmt.Print("  " + Bold + m.Color + m.Name + Reset)
 	if m.IsBoss {
-		fmt.Print(Red + Bold + "  ☠ BOSS" + Reset)
+		fmt.Print(Red + "  ☠ BOSS" + Reset)
 	}
 	if m.Enraged {
-		fmt.Print(Red + Bold + "  [EN RAGE]" + Reset)
+		fmt.Print(Red + "  [EN RAGE]" + Reset)
 	}
 	if m.Burning > 0 {
-		fmt.Printf(Orange+"  [Brûlure %d]"+Reset, m.Burning)
+		fmt.Printf("%s  [Brûlure %d]%s", Orange, m.Burning, Reset)
 	}
 	fmt.Printf("\n  %s♥%s %s %d / %d\n", Red, Reset, hpBar(m.HP, m.MaxHP, 40), m.HP, m.MaxHP)
 
 	fmt.Println(DarkGray + "  " + strings.Repeat("─", 60) + Reset)
-	fmt.Printf("  %s%s%s%s\n", Bold+Gold, c.Name, Reset, effectBadges(c))
+	fmt.Println("  " + Gold + Bold + c.Name + Reset + effectBadges(c))
 	fmt.Printf("  %s♥%s %s %d / %d    %s♦%s %s %d / %d\n",
 		Red, Reset, hpBar(c.HP, c.MaxHP, 20), c.HP, c.MaxHP,
 		Blue, Reset, bar(c.Mana, c.MaxMana, 12, Blue), c.Mana, c.MaxMana)
 }
 
-// characterTurn renvoie true si le joueur a quitté le combat.
+// characterTurn fait jouer le héros. Renvoie true s'il quitte le combat.
 func characterTurn(c *Character, m *Monster, training bool) bool {
 	if c.Stunned > 0 {
 		c.Stunned--
-		warn("Vous êtes étourdi. Vous voyez des étoiles et passez votre tour.")
+		warn("Vous êtes étourdi et passez votre tour.")
 		return false
 	}
 
-	leave := "Fuir"
-	if training {
-		leave = "Abandonner"
-	}
 	for {
 		fmt.Println()
 		optionHint(1, "Attaquer", fmt.Sprintf("%d dégâts", c.Attack))
 		optionHint(2, "Sorts", fmt.Sprintf("%d mana", c.Mana))
-		optionHint(3, "Objets", "potions, poison…")
-		option(4, leave)
+		option(3, "Objets")
+		if training {
+			option(4, "Abandonner")
+		} else {
+			option(4, "Fuir")
+		}
 
 		switch readChoice(1, 4) {
 		case 1:
@@ -169,82 +140,65 @@ func characterTurn(c *Character, m *Monster, training bool) bool {
 	}
 }
 
-// flee renvoie true si le joueur quitte réellement le combat.
+// flee renvoie true si le héros quitte le combat.
 func flee(c *Character, m *Monster, training bool) bool {
 	if training {
-		info("Vous abandonnez. Le gobelin d'entraînement fait une danse de la victoire.")
+		info("Vous abandonnez l'entraînement.")
 		pause()
 		return true
 	}
 	if m.IsBoss {
-		fail("%s bloque la sortie. On ne fuit pas un boss !", m.Name)
+		fail("On ne fuit pas un boss !")
 		return false
 	}
-	dots("Vous tentez de fuir", Gray)
 	if rand.IntN(100) < 50 {
-		success("Vous courez jusqu'au camp. Avec beaucoup de dignité, évidemment.")
+		success("Vous courez jusqu'au camp. Avec beaucoup de dignité.")
 		pause()
 		return true
 	}
-	fail("%s vous rattrape par le col. Raté !", m.Name)
+	fail("%s vous rattrape. La fuite échoue !", m.Name)
 	return false
 }
 
-// -------------------------------------------------------------------- dégâts
-
-// damageMonster applique l'affaiblissement et les coups critiques du héros.
+// damageMonster applique un coup du héros : ÷ 2 s'il est affaibli, et 10 %
+// de chance de coup critique (× 2).
 func damageMonster(c *Character, m *Monster, damage int) {
 	note := ""
 	if c.Weakened > 0 {
-		damage = max(1, damage/2)
 		c.Weakened--
-		note += Purple + "  (affaibli : ÷ 2)" + Reset
+		damage = max(1, damage/2)
+		note = note + " (affaibli)"
 	}
 	if rand.IntN(100) < 10 {
-		damage *= 2
-		note += Gold + Bold + "  ★ CRITIQUE !" + Reset
+		damage = damage * 2
+		note = note + " ★ CRITIQUE !"
 	}
 	hurtMonster(m, damage, note)
 }
 
-// hurtMonster retire des PV au monstre, sans bonus ni malus.
 func hurtMonster(m *Monster, damage int, note string) {
 	m.HP = max(m.HP-damage, 0)
-	fmt.Printf("  %s» %s perd %d PV%s%s\n", Gold, m.Name, damage, Reset, note)
+	fmt.Printf("  %s» %s perd %d PV%s%s\n", Gold, m.Name, damage, note, Reset)
 }
 
-func damagePlayer(m *Monster, c *Character, damage int) {
-	hitPlayer(m, c, m.Hit, damage)
-}
-
-// hitPlayer blesse le héros ; verb raconte le coup dans le journal de combat.
+// hitPlayer : le monstre frappe le héros. Peau de Pierre divise les dégâts par 2.
 func hitPlayer(m *Monster, c *Character, verb string, damage int) {
-	if c.TestMode {
-		fmt.Printf("  %s« %s %s… et rebondit sur le mode test.%s\n", Gray, m.Name, verb, Reset)
-		return
-	}
 	note := ""
 	if c.StoneSkin > 0 {
-		damage = max(1, damage/2)
 		c.StoneSkin--
-		note = Silver + "  (Peau de Pierre : ÷ 2)" + Reset
+		damage = max(1, damage/2)
+		note = " (Peau de Pierre)"
 	}
 	c.HP = max(c.HP-damage, 0)
-	fmt.Printf("  %s« %s %s : -%d PV%s%s\n", Red, m.Name, verb, damage, Reset, note)
+	fmt.Printf("  %s« %s %s : -%d PV%s%s\n", Red, m.Name, verb, damage, note, Reset)
 }
-
-// --------------------------------------------------------------------- sorts
 
 // spellMenu renvoie true si un sort a été lancé.
 func spellMenu(c *Character, m *Monster) bool {
 	section("Sorts")
 	for i, name := range c.Skills {
 		spell := spells[name]
-		label := fmt.Sprintf("%-16s %s%2d mana%s · %s", name, Blue, spell.Cost, Reset+Gray, spell.Description)
-		if !c.canCast(name) {
-			label = DarkGray + fmt.Sprintf("%-16s %2d mana · %s", name, spell.Cost, spell.Description)
-		}
-		option(i+1, label+Reset)
+		option(i+1, fmt.Sprintf("%-16s %s%2d mana%s  %s%s%s", name, Blue, spell.Cost, Reset, Gray, spell.Description, Reset))
 	}
 	back("Retour")
 
@@ -253,24 +207,37 @@ func spellMenu(c *Character, m *Monster) bool {
 		return false
 	}
 	name := c.Skills[choice-1]
-	if !c.canCast(name) {
-		fail("Pas assez de mana pour %s (%d / %d). Il faudra taper.", name, c.Mana, spells[name].Cost)
+	if c.Mana < spells[name].Cost {
+		fail("Pas assez de mana (%d / %d).", c.Mana, spells[name].Cost)
 		return false
 	}
+	castSpell(c, m, name)
+	return true
+}
 
+func castSpell(c *Character, m *Monster, name string) {
 	spell := spells[name]
-	if !c.TestMode {
-		c.Mana -= spell.Cost
-	}
+	c.Mana -= spell.Cost
 	fmt.Printf("\n  %s✦ %s !%s\n", Purple+Bold, name, Reset)
 	printArt(spell.Art, spell.Colors...)
+
 	if spell.Damage > 0 {
 		damageMonster(c, m, spell.Damage)
 	}
-	if spell.Extra != nil {
-		spell.Extra(c, m)
+
+	switch name {
+	case SpellFireball:
+		m.Burning = 3
+		warn("%s prend feu ! (-5 PV par tour pendant 3 tours)", m.Name)
+	case SpellSecondWind:
+		c.HP = min(c.HP+25, c.MaxHP)
+		c.Bleeding = 0
+		c.Burning = 0
+		success("+25 PV, saignement et brûlure soignés.")
+	case SpellStoneSkin:
+		c.StoneSkin = 2
+		success("Votre peau devient pierre : les 2 prochains coups font moitié moins mal.")
 	}
-	return true
 }
 
 // combatInventory renvoie true si un objet a été utilisé.
@@ -282,13 +249,13 @@ func combatInventory(c *Character, m *Monster) bool {
 		}
 	}
 	if len(usable) == 0 {
-		fail("Vous fouillez vos poches : une miette et un bouton. Rien d'utile.")
+		fail("Aucun objet utilisable en combat.")
 		return false
 	}
 
 	section("Objets")
 	for i, item := range usable {
-		option(i+1, fmt.Sprintf("%s%s%s x%d", itemColor(item), item, Reset, c.Inventory[item]))
+		option(i+1, fmt.Sprintf("%s x%d", item, c.Inventory[item]))
 	}
 	back("Retour")
 
@@ -301,110 +268,159 @@ func combatInventory(c *Character, m *Monster) bool {
 	return true
 }
 
-// ----------------------------------------------------------- tours du monstre
-
+// monsterTurn : chaque boss a sa propre attaque, les autres monstres
+// utilisent l'attaque de base. Tout suit un rythme de 3 tours.
 func monsterTurn(m *Monster, c *Character, turn int) {
-	wait(400)
-	if m.Pattern != nil {
-		m.Pattern(m, c, turn)
-		return
+	switch m.Kind {
+	case "goblin_king":
+		goblinKingTurn(m, c, turn)
+	case "lich":
+		lichTurn(m, c, turn)
+	case "dragon":
+		dragonTurn(m, c, turn)
+	default:
+		basicTurn(m, c, turn)
 	}
-	basicPattern(m, c, turn)
 }
 
-// basicPattern : attaque normale, doublée tous les 3 tours.
-func basicPattern(m *Monster, c *Character, turn int) {
-	if turn%3 != 0 {
-		damagePlayer(m, c, m.Attack)
-		return
+// basicTurn : une attaque normale, doublée tous les 3 tours.
+func basicTurn(m *Monster, c *Character, turn int) {
+	if turn%3 == 0 {
+		fmt.Println(Orange + "  ATTAQUE PUISSANTE !" + Reset)
+		hitPlayer(m, c, m.Hit, m.Attack*2)
+		applyEffect(c, m.Effect)
+	} else {
+		hitPlayer(m, c, m.Hit, m.Attack)
 	}
-	fmt.Println(Orange + Bold + "  ATTAQUE PUISSANTE !" + Reset)
-	damagePlayer(m, c, m.Attack*2)
-	applyEffect(c, m.Effect)
 }
 
-// goblinKingPattern : Grukk appelle un garde qui le soigne tous les 3 tours.
-func goblinKingPattern(king *Monster, c *Character, turn int) {
-	switch turn % 3 {
-	case 0:
-		king.HP = min(king.HP+20, king.MaxHP)
+// goblinKingTurn : tous les 3 tours, un garde vient soigner Grukk.
+func goblinKingTurn(m *Monster, c *Character, turn int) {
+	if turn%3 == 0 {
+		m.HP = min(m.HP+20, m.MaxHP)
 		warn("Un garde accourt et soigne son roi : Grukk +20 PV !")
-		damagePlayer(king, c, king.Attack*3/2)
-	case 2:
-		damagePlayer(king, c, king.Attack)
-		warn("Grukk sort sa corne… Un garde arrive au prochain tour !")
-	default:
-		damagePlayer(king, c, king.Attack)
+		hitPlayer(m, c, m.Hit, m.Attack*3/2)
+	} else {
+		hitPlayer(m, c, m.Hit, m.Attack)
 	}
 }
 
-// lichPattern : Mor'Vath vole le mana du héros pour se soigner.
-func lichPattern(lich *Monster, c *Character, turn int) {
-	switch turn % 3 {
-	case 0:
-		stolen := 0
-		if !c.TestMode {
-			stolen = min(c.Mana, 15)
-			c.Mana -= stolen
-		}
-		lich.HP = min(lich.HP+stolen*2, lich.MaxHP)
-		fmt.Printf("  %sDRAIN D'ÂME ! Vous perdez %d mana, la Liche regagne %d PV.%s\n", Purple+Bold, stolen, stolen*2, Reset)
-		damagePlayer(lich, c, lich.Attack)
-		applyEffect(c, lich.Effect)
-	case 2:
-		damagePlayer(lich, c, lich.Attack)
-		warn("Les yeux de Mor'Vath s'illuminent… Drain d'âme au prochain tour !")
-	default:
-		damagePlayer(lich, c, lich.Attack)
+// lichTurn : tous les 3 tours, Mor'Vath vole du mana pour se soigner.
+func lichTurn(m *Monster, c *Character, turn int) {
+	if turn%3 == 0 {
+		stolen := min(c.Mana, 15)
+		c.Mana -= stolen
+		m.HP = min(m.HP+stolen*2, m.MaxHP)
+		fmt.Printf("  %sDRAIN D'ÂME ! Vous perdez %d mana, la Liche regagne %d PV.%s\n", Purple, stolen, stolen*2, Reset)
+		hitPlayer(m, c, m.Hit, m.Attack)
+		applyEffect(c, m.Effect)
+	} else {
+		hitPlayer(m, c, m.Hit, m.Attack)
 	}
 }
 
-// dragonPattern : Ignarok s'enrage à mi-vie et souffle tous les 3 tours.
-func dragonPattern(dragon *Monster, c *Character, turn int) {
-	if !dragon.Enraged && dragon.HP <= dragon.MaxHP/2 {
-		dragon.Enraged = true
-		dragon.Attack += dragon.Attack * 3 / 10
-		printArt(artDragon, bloodColors...)
-		fmt.Println(Red + Bold + "  IGNAROK EST FURIEUX ! (attaque +30 %) On a dû le vexer." + Reset)
+// dragonTurn : Ignarok s'enrage sous la moitié de ses PV (+30 % d'attaque)
+// et crache du feu tous les 3 tours.
+func dragonTurn(m *Monster, c *Character, turn int) {
+	if !m.Enraged && m.HP <= m.MaxHP/2 {
+		m.Enraged = true
+		m.Attack = m.Attack * 13 / 10
+		fmt.Println(Red + Bold + "  IGNAROK EST FURIEUX ! (attaque +30 %)" + Reset)
 	}
 
-	switch turn % 3 {
-	case 0:
+	if turn%3 == 0 {
 		printArt(artBreath, fireColors...)
 		fmt.Println(Red + Bold + "  SOUFFLE INFERNAL !" + Reset)
-		hitPlayer(dragon, c, "vous fait rôtir", dragon.Attack*5/2)
-		applyEffect(c, dragon.Effect)
-	case 2:
-		damagePlayer(dragon, c, dragon.Attack)
-		warn("Ignarok inspire très fort… Souffle Infernal au prochain tour !")
-	default:
-		damagePlayer(dragon, c, dragon.Attack)
+		hitPlayer(m, c, "vous fait rôtir", m.Attack*5/2)
+		applyEffect(c, m.Effect)
+	} else {
+		hitPlayer(m, c, m.Hit, m.Attack)
 	}
 }
 
-// ------------------------------------------------------------------- issues
+func applyEffect(c *Character, effect string) {
+	switch effect {
+	case EffectBleed:
+		c.Bleeding = 3
+		warn("Vous saignez ! (-3 PV par tour, 3 tours)")
+	case EffectBurn:
+		c.Burning = 3
+		warn("Vous brûlez ! (-5 PV par tour, 3 tours)")
+	case EffectStun:
+		c.Stunned = 1
+		warn("Vous êtes étourdi ! (vous passez votre prochain tour)")
+	case EffectWeaken:
+		c.Weakened = 3
+		warn("Vous êtes affaibli ! (vos 3 prochaines attaques ÷ 2)")
+	}
+}
+
+func updateEffects(c *Character, m *Monster) {
+	if c.Bleeding > 0 {
+		c.Bleeding--
+		c.HP = max(c.HP-3, 0)
+		fmt.Println(Red + "  « Saignement : -3 PV" + Reset)
+	}
+	if c.Burning > 0 {
+		c.Burning--
+		c.HP = max(c.HP-5, 0)
+		fmt.Println(Orange + "  « Brûlure : -5 PV" + Reset)
+	}
+	if m.Burning > 0 {
+		m.Burning--
+		hurtMonster(m, 5, " (brûlure)")
+	}
+}
+
+func clearEffects(c *Character) {
+	c.Bleeding = 0
+	c.Burning = 0
+	c.Stunned = 0
+	c.Weakened = 0
+	c.StoneSkin = 0
+}
+
+func effectBadges(c *Character) string {
+	badges := ""
+	if c.Bleeding > 0 {
+		badges += fmt.Sprintf(" %s[Saignement %d]%s", Red, c.Bleeding, Reset)
+	}
+	if c.Burning > 0 {
+		badges += fmt.Sprintf(" %s[Brûlure %d]%s", Orange, c.Burning, Reset)
+	}
+	if c.Stunned > 0 {
+		badges += fmt.Sprintf(" %s[Étourdi]%s", Yellow, Reset)
+	}
+	if c.Weakened > 0 {
+		badges += fmt.Sprintf(" %s[Affaibli %d]%s", Purple, c.Weakened, Reset)
+	}
+	if c.StoneSkin > 0 {
+		badges += fmt.Sprintf(" %s[Peau de Pierre %d]%s", Silver, c.StoneSkin, Reset)
+	}
+	return badges
+}
 
 func winFight(c *Character, m *Monster, training bool) string {
-	wait(500)
 	clearScreen()
 	banner("VICTOIRE CONTRE "+strings.ToUpper(m.Name)+" !", Gold)
 
-	// L'arène ne rapporte rien : sinon on y farmerait l'XP sans risque.
+	// L'entraînement ne rapporte rien : sinon on y gagnerait des niveaux sans risque.
 	if training {
 		fmt.Println()
-		say("Sergent Grol", Gold, "Propre ! Mais l'entraînement ne paie pas : le butin, c'est au donjon.")
+		say("Sergent Grol", Gold, "Propre ! Mais le butin, c'est au donjon.")
 		pause()
 		return Victory
 	}
 
 	c.Victories++
 	c.Gold += m.Gold
-	c.GoldEarned += m.Gold
 	printArt(artChest, campColors...)
 	section("Butin")
-	fmt.Printf("  %s¤ +%d Y-Coins%s\n", Gold+Bold, m.Gold, Reset)
-	if m.Drop != "" && rand.IntN(100) < m.DropChance && addInventory(c, m.Drop, 1) {
-		fmt.Printf("  %s■ %s%s\n", itemColor(m.Drop)+Bold, m.Drop, Reset)
+	fmt.Printf("  %s¤ +%d Y-Coins%s\n", Gold, m.Gold, Reset)
+	if m.Drop != "" && rand.IntN(100) < m.DropChance {
+		if addInventory(c, m.Drop, 1) {
+			fmt.Println("  ■ " + m.Drop)
+		}
 	}
 	gainXP(c, m.XP)
 	updateQuest(c, m.Name)
@@ -413,8 +429,6 @@ func winFight(c *Character, m *Monster, training bool) string {
 }
 
 func loseFight(c *Character, training bool) string {
-	wait(1200)
-	// À l'entraînement on ne meurt pas vraiment : ni stèle, ni pénalité.
 	if training {
 		fmt.Println()
 		say("Sergent Grol", Gold, "Battu par le gobelin d'entraînement… Relève-toi, personne n'a rien vu.")
@@ -424,7 +438,7 @@ func loseFight(c *Character, training bool) string {
 	isDead(c)
 	lost := c.Gold / 5
 	c.Gold -= lost
-	fail("Quelqu'un a fait les poches de votre héros endormi : -%d Y-Coins.", lost)
+	fail("Vous perdez %d Y-Coins en chemin.", lost)
 	pause()
 	return Defeat
 }

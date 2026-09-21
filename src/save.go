@@ -6,8 +6,7 @@ import (
 	"os"
 )
 
-// Une partie se range dans l'un des trois emplacements, sous forme d'un
-// fichier JSON qui contient exactement la structure Character.
+// Une sauvegarde est un fichier JSON qui contient la structure Character.
 const saveSlots = 3
 
 func slotFile(slot int) string {
@@ -20,11 +19,12 @@ func saveGame(c *Character) {
 		fail("Impossible de sauvegarder : %v", err)
 		return
 	}
-	if err := os.WriteFile(slotFile(c.SaveSlot), data, 0644); err != nil {
+	err = os.WriteFile(slotFile(c.SaveSlot), data, 0644)
+	if err != nil {
 		fail("Impossible d'écrire la sauvegarde : %v", err)
 		return
 	}
-	success("Partie sauvegardée (emplacement %d). Vos exploits sont à l'abri.", c.SaveSlot)
+	success("Partie sauvegardée (emplacement %d).", c.SaveSlot)
 }
 
 func loadGame(slot int) (*Character, error) {
@@ -33,30 +33,23 @@ func loadGame(slot int) (*Character, error) {
 		return nil, err
 	}
 	var c Character
-	if err := json.Unmarshal(data, &c); err != nil {
+	err = json.Unmarshal(data, &c)
+	if err != nil {
 		return nil, err
 	}
-	if c.Inventory == nil { // sac absent d'une très vieille sauvegarde
+	// Une vieille sauvegarde peut ne pas avoir ces champs : sans ces maps
+	// vides, le jeu planterait au premier objet rangé.
+	if c.Inventory == nil {
 		c.Inventory = map[string]int{}
+	}
+	if c.Equipment == nil {
+		c.Equipment = map[string]string{}
 	}
 	c.SaveSlot = slot
 	return &c, nil
 }
 
-// slotSummary décrit une sauvegarde en une ligne ; le booléen dit si elle existe.
-func slotSummary(slot int) (string, bool) {
-	c, err := loadGame(slot)
-	if err != nil {
-		return DarkGray + "— vide —" + Reset, false
-	}
-	summary := fmt.Sprintf("%s%s%s · %s · %s · %sniveau %d · étage %d/3%s",
-		Bold+Gold, c.Name, Reset, c.Class, difficultyOf(c.Difficulty).Name, Gray, c.Level, c.FloorsCleared, Reset)
-	if c.DragonSlain {
-		summary += Gold + " · ★ Dragon vaincu" + Reset
-	}
-	return summary, true
-}
-
+// chooseSlot affiche les 3 emplacements et renvoie celui choisi (0 = retour).
 func chooseSlot(title string, mustExist bool) int {
 	for {
 		clearScreen()
@@ -64,8 +57,12 @@ func chooseSlot(title string, mustExist bool) int {
 		banner(title, Gold)
 		fmt.Println()
 		for slot := 1; slot <= saveSlots; slot++ {
-			summary, _ := slotSummary(slot)
-			option(slot, fmt.Sprintf("Emplacement %d : %s", slot, summary))
+			c, err := loadGame(slot)
+			if err != nil {
+				option(slot, "Emplacement vide")
+			} else {
+				option(slot, fmt.Sprintf("%s%s%s · %s · niveau %d · étage %d/3", Gold+Bold, c.Name, Reset, c.Class, c.Level, c.FloorsCleared))
+			}
 		}
 		back("Retour")
 
@@ -73,18 +70,19 @@ func chooseSlot(title string, mustExist bool) int {
 		if slot == 0 {
 			return 0
 		}
-		_, exists := slotSummary(slot)
-		switch {
-		case mustExist && !exists:
-			fail("Cet emplacement est vide. Aussi vide qu'une crypte pillée.")
+		_, err := loadGame(slot)
+		exists := err == nil
+
+		if mustExist && !exists {
+			fail("Cet emplacement est vide.")
 			pause()
-		case !mustExist && exists:
-			warn("Cet emplacement contient déjà une partie.")
-			if ask("L'écraser ? Elle sera perdue pour toujours.") {
-				return slot
-			}
-		default:
-			return slot
+			continue
 		}
+		if !mustExist && exists {
+			if !ask("Cet emplacement contient déjà une partie. L'écraser ?") {
+				continue
+			}
+		}
+		return slot
 	}
 }

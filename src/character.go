@@ -6,47 +6,42 @@ import (
 	"unicode"
 )
 
-// Character est le héros. C'est la seule structure sauvegardée sur disque :
-// tout ce qui doit survivre à un « Continuer » vit ici.
+// Character est le héros. C'est la seule structure sauvegardée sur disque.
 type Character struct {
 	Name         string
 	Class        string
+	Difficulty   string
 	Level        int
-	MaxHP        int
-	HP           int
-	MaxMana      int
-	Mana         int
-	Attack       int
 	XP           int
 	XPMax        int
+	HP           int
+	MaxHP        int
+	Mana         int
+	MaxMana      int
+	Attack       int
 	Gold         int
 	Skills       []string
-	Equipment    Equipment
-	Inventory    map[string]int
+	Inventory    map[string]int // objet → quantité
 	InventoryMax int
+	Equipment    map[string]string // emplacement → objet porté
 
 	InventoryUpgrades int
 	FreePotionTaken   bool
 	FloorsCleared     int
-	DragonSlain       bool
 	Victories         int
 	Deaths            int
-	GoldEarned        int
-	TestMode          bool
-	Difficulty        string // « Facile », « Normal » ou « Difficile »
 	SaveSlot          int
 
-	QuestIndex      int
-	QuestActive     bool
-	QuestProgress   int
-	QuestsCompleted int
+	QuestIndex    int
+	QuestActive   bool
+	QuestProgress int
 
-	// Effets temporaires, remis à zéro à chaque combat.
-	Bleeding  int // tours restants
+	// Effets de combat : nombre de tours (ou de coups) restants.
+	Bleeding  int
 	Burning   int
 	Stunned   int
-	Weakened  int // attaques affaiblies restantes
-	StoneSkin int // attaques encore absorbées
+	Weakened  int
+	StoneSkin int
 }
 
 const (
@@ -57,24 +52,6 @@ const (
 	SpellStoneSkin   = "Peau de Pierre"
 )
 
-// knows dit si le héros connaît déjà un sort.
-func (c *Character) knows(spell string) bool {
-	for _, known := range c.Skills {
-		if known == spell {
-			return true
-		}
-	}
-	return false
-}
-
-// canCast dit si le héros a assez de mana (toujours vrai en mode test).
-func (c *Character) canCast(spell string) bool {
-	return c.TestMode || c.Mana >= spells[spell].Cost
-}
-
-// ----------------------------------------------------------------- classes
-
-// Class décrit une classe jouable et sa progression par niveau.
 type Class struct {
 	Name     string
 	MaxHP    int
@@ -83,7 +60,7 @@ type Class struct {
 	Summary  string
 	Color    string
 	Portrait string
-	HPGain   int
+	HPGain   int // gagnés à chaque niveau
 	ManaGain int
 }
 
@@ -102,116 +79,20 @@ func classOf(name string) Class {
 	return classes[0]
 }
 
-// --------------------------------------------------------------- création
-
-func newCharacter(name string, class Class) *Character {
-	return &Character{
-		Name:         name,
-		Class:        class.Name,
-		Level:        1,
-		MaxHP:        class.MaxHP,
-		HP:           class.MaxHP / 2,
-		MaxMana:      class.Mana,
-		Mana:         class.Mana,
-		Attack:       5,
-		XPMax:        50,
-		Gold:         50,
-		Skills:       []string{SpellPunch, class.Spell},
-		Inventory:    map[string]int{ItemHealthPotion: 1},
-		InventoryMax: 10,
-	}
-}
-
-func characterCreation() *Character {
-	clearScreen()
-	banner("NOUVEAU HÉROS", Gold)
-	fmt.Println()
-	say("Le maire", Gold, "Un volontaire contre le dragon ? Merveilleux ! Votre nom, s'il vous plaît. C'est pour… euh… la plaque commémorative.")
-	fmt.Println(DarkGray + "  (lettres uniquement, 12 maximum)" + Reset)
-
-	name := readLine()
-	for !isValidName(name) {
-		fail("Des lettres uniquement, 12 maximum. Même les gobelins y arrivent.")
-		name = readLine()
-	}
-	name = formatName(name)
-	success("Bienvenue, %s !", name)
-	wait(700)
-
-	for {
-		class := chooseClass(name)
-		clearScreen()
-		printArtSlow(class.Portrait, class.Color)
-		fmt.Println()
-		fmt.Printf("  %s%s%s, %s%s%s. Est-ce bien vous ?\n", Bold+Gold, name, Reset, class.Color, class.Name, Reset)
-		if !ask("Confirmer ?") {
-			continue
-		}
-		c := newCharacter(name, class)
-		c.Difficulty = chooseDifficulty()
-		if strings.EqualFold(name, "test") {
-			activateTestMode(c)
-		}
-		return c
-	}
-}
-
-// chooseClass affiche les trois portraits côte à côte avec leurs statistiques.
-func chooseClass(name string) Class {
-	clearScreen()
-	banner("CHOISISSEZ VOTRE CLASSE, "+strings.ToUpper(name), Gold)
-	fmt.Println()
-
-	const column = 24
-	rowColors := []string{Bold, Red, Blue, Purple, Gray}
-	portraits, colors := []string{}, []string{}
-	rows := make([]string, len(rowColors))
-	for i, class := range classes {
-		portraits = append(portraits, class.Portrait)
-		colors = append(colors, class.Color)
-		texts := []string{
-			fmt.Sprintf("[%d] %s", i+1, strings.ToUpper(class.Name)),
-			fmt.Sprintf("♥ %d PV", class.MaxHP),
-			fmt.Sprintf("♦ %d mana", class.Mana),
-			"✦ " + class.Spell,
-			"  " + class.Summary,
-		}
-		for row, text := range texts {
-			color := rowColors[row]
-			if row == 0 {
-				color = class.Color + Bold
-			}
-			// On complète le texte nu à la bonne largeur AVANT de le colorer :
-			// les codes ANSI ne prennent aucune place à l'écran.
-			rows[row] += color + padRight(text, column) + Reset
-		}
-	}
-	sideBySide(portraits, colors, column)
-	fmt.Println()
-	for _, row := range rows {
-		fmt.Println("   " + row)
-	}
-	return classes[readChoice(1, len(classes))-1]
-}
-
-// Difficulty règle la puissance des monstres et les gains du joueur.
-// Les pourcentages servent à la fois au texte du menu et au calcul réel :
-// impossible que les deux se contredisent.
 type Difficulty struct {
 	Name   string
 	Detail string
 	Color  string
-	Power  int // % appliqué aux PV et à l'attaque du monstre
-	Reward int // % appliqué à l'XP et aux Y-Coins
+	Power  int // % appliqué aux PV et à l'attaque des monstres
+	Reward int // % appliqué à l'XP et aux Y-Coins gagnés
 }
 
 var difficulties = []Difficulty{
-	{"Facile", "Monstres affaiblis (-25 % de PV et d'attaque). Pas de honte.", Green, 75, 100},
+	{"Facile", "Monstres affaiblis (-25 % de PV et d'attaque)", Green, 75, 100},
 	{"Normal", "L'aventure telle qu'on l'a imaginée", Gold, 100, 100},
-	{"Difficile", "Monstres +30 %, mais +50 % d'XP et de Y-Coins. Courage.", Red, 130, 150},
+	{"Difficile", "Monstres +30 %, mais +50 % d'XP et de Y-Coins", Red, 130, 150},
 }
 
-// difficultyOf retrouve une difficulté par son nom ; Normal par défaut.
 func difficultyOf(name string) Difficulty {
 	for _, level := range difficulties {
 		if level.Name == name {
@@ -219,6 +100,59 @@ func difficultyOf(name string) Difficulty {
 		}
 	}
 	return difficulties[1]
+}
+
+func newCharacter(name string, class Class) *Character {
+	return &Character{
+		Name:         name,
+		Class:        class.Name,
+		Level:        1,
+		XPMax:        50,
+		HP:           class.MaxHP / 2,
+		MaxHP:        class.MaxHP,
+		Mana:         class.Mana,
+		MaxMana:      class.Mana,
+		Attack:       5,
+		Gold:         50,
+		Skills:       []string{SpellPunch, class.Spell},
+		Inventory:    map[string]int{ItemHealthPotion: 1},
+		InventoryMax: 10,
+		Equipment:    map[string]string{},
+	}
+}
+
+func characterCreation() *Character {
+	clearScreen()
+	banner("NOUVEAU HÉROS", Gold)
+	fmt.Println()
+	say("Le maire", Gold, "Un volontaire contre le dragon ? Merveilleux ! Votre nom, s'il vous plaît. C'est pour… la plaque commémorative.")
+	fmt.Println(Gray + "  (lettres uniquement, 12 maximum)" + Reset)
+
+	name := readLine()
+	for !isValidName(name) {
+		fail("Des lettres uniquement, 12 maximum.")
+		name = readLine()
+	}
+	name = formatName(name)
+
+	c := newCharacter(name, chooseClass(name))
+	c.Difficulty = chooseDifficulty()
+	return c
+}
+
+func chooseClass(name string) Class {
+	clearScreen()
+	banner("CHOISISSEZ VOTRE CLASSE, "+strings.ToUpper(name), Gold)
+	fmt.Println()
+	for i, class := range classes {
+		option(i+1, fmt.Sprintf("%s%-7s%s %s♥ %3d PV%s  %s♦ %2d mana%s  %s✦ %-15s%s %s%s%s",
+			class.Color+Bold, class.Name, Reset,
+			Red, class.MaxHP, Reset,
+			Blue, class.Mana, Reset,
+			Purple, class.Spell, Reset,
+			Gray, class.Summary, Reset))
+	}
+	return classes[readChoice(1, len(classes))-1]
 }
 
 func chooseDifficulty() string {
@@ -229,31 +163,6 @@ func chooseDifficulty() string {
 		option(i+1, level.Color+padRight(level.Name, 12)+Reset+Gray+level.Detail+Reset)
 	}
 	return difficulties[readChoice(1, len(difficulties))-1].Name
-}
-
-func activateTestMode(c *Character) {
-	c.TestMode = true
-	c.HP = c.MaxHP
-	c.Gold = 999999
-	c.Attack = 999
-	c.InventoryMax = 999
-	c.Skills = []string{SpellPunch, SpellFireball, SpellSecondWind, SpellSilverArrow, SpellStoneSkin}
-	c.FloorsCleared = 2
-
-	clearScreen()
-	banner("MODE TEST ACTIVÉ", Gold)
-	fmt.Println()
-	for _, effect := range []string{
-		"PV infinis : vous ne subissez aucun dégât",
-		"Mana infini : les sorts ne coûtent rien",
-		"999 999 Y-Coins et un sac de 999 places",
-		"Attaque à 999 : chaque coup est mortel",
-		"Tous les sorts connus et les 3 étages débloqués",
-	} {
-		info("%s", effect)
-	}
-	fmt.Println(Gray + Italic + "\n  Le dragon trouve ça un peu injuste." + Reset)
-	pause()
 }
 
 func isValidName(name string) bool {
@@ -268,25 +177,21 @@ func isValidName(name string) bool {
 	return true
 }
 
+// formatName met une majuscule au début et des minuscules ensuite : « pACO » → « Paco ».
 func formatName(name string) string {
 	letters := []rune(strings.ToLower(name))
 	letters[0] = unicode.ToUpper(letters[0])
 	return string(letters)
 }
 
-// ------------------------------------------------------------------ fiche
-
-// showStatus est le bandeau compact affiché en haut de la plupart des écrans.
-// Le niveau est accolé à la barre d'XP : c'est elle qui le fait monter.
 func showStatus(c *Character) {
-	tags := ""
-	if c.TestMode {
-		tags = Gold + Bold + "   ∞ MODE TEST" + Reset
-	}
 	fmt.Println(DarkGray + "  ╭" + strings.Repeat("─", 72) + Reset)
-	fmt.Printf("  %s│%s %s%s%s · %s%s%s   %s¤ %d Y-Coins%s   %s■ Sac %d/%d%s%s\n",
-		DarkGray, Reset, Bold+Gold, c.Name, Reset, classOf(c.Class).Color, c.Class, Reset,
-		Gold, c.Gold, Reset, Gray, inventoryCount(c), c.InventoryMax, Reset, tags)
+	fmt.Printf("  %s│%s %s%s%s · %s%s%s   %s¤ %d Y-Coins%s   %s■ Sac %d/%d%s\n",
+		DarkGray, Reset,
+		Gold+Bold, c.Name, Reset,
+		classOf(c.Class).Color, c.Class, Reset,
+		Gold, c.Gold, Reset,
+		Gray, inventoryCount(c), c.InventoryMax, Reset)
 	fmt.Printf("  %s│%s %s♥%s %s %3d/%-3d  %s♦%s %s %3d/%-3d  %s★ Niv.%d%s %s %d/%d\n",
 		DarkGray, Reset,
 		Red, Reset, hpBar(c.HP, c.MaxHP, 14), c.HP, c.MaxHP,
@@ -299,87 +204,79 @@ func displayInfo(c *Character) {
 	clearScreen()
 	class := classOf(c.Class)
 	banner("FICHE DU HÉROS", Gold)
-	printArt(class.Portrait, class.Color, class.Color, class.Color, Silver)
+	printArt(class.Portrait, class.Color)
 
 	section(c.Name + " · " + c.Class)
 	fmt.Printf("   %s♥ PV        %s %s %d / %d\n", Red, Reset, hpBar(c.HP, c.MaxHP, 25), c.HP, c.MaxHP)
 	fmt.Printf("   %s♦ Mana      %s %s %d / %d\n", Blue, Reset, bar(c.Mana, c.MaxMana, 25, Blue), c.Mana, c.MaxMana)
 	fmt.Printf("   %s★ Niveau %-3d%s %s %d / %d XP\n", Purple+Bold, c.Level, Reset, bar(c.XP, c.XPMax, 25, Purple), c.XP, c.XPMax)
 	fmt.Printf("   %s» Attaque   %s %d dégâts\n", Orange, Reset, c.Attack)
-	fmt.Printf("   %s¤ Bourse    %s %d Y-Coins    %s■ Sac%s %d / %d\n", Gold, Reset, c.Gold, Gray, Reset, inventoryCount(c), c.InventoryMax)
+	fmt.Printf("   %s¤ Bourse    %s %d Y-Coins\n", Gold, Reset, c.Gold)
 
 	section("Équipement")
 	for _, slot := range equipmentSlots {
-		fmt.Printf("   %s%-7s%s %s\n", Silver, slot, Reset, equipmentLabel(c, *c.slot(slot)))
+		item := c.Equipment[slot]
+		if item == "" {
+			item = DarkGray + "— rien —" + Reset
+		}
+		fmt.Printf("   %s%-7s%s %s\n", Silver, slot, Reset, item)
 	}
 
 	section("Sorts")
 	for _, name := range c.Skills {
 		spell := spells[name]
-		fmt.Printf("   %s✦ %-16s%s %s(%d mana)%s %s\n", Purple, name, Reset, Blue, spell.Cost, Reset, Gray+spell.Description+Reset)
+		fmt.Printf("   %s✦ %-16s%s %s(%d mana)%s %s%s%s\n", Purple, name, Reset, Blue, spell.Cost, Reset, Gray, spell.Description, Reset)
 	}
 
 	section("Progression")
-	fmt.Printf("   Difficulté : %s   ·   Donjon : %d / 3 étages\n", difficultyOf(c.Difficulty).Name, c.FloorsCleared)
-	fmt.Printf("   Monstres vaincus : %d   ·   Morts : %d   ·   Missions : %d / %d\n", c.Victories, c.Deaths, c.QuestsCompleted, len(quests))
+	fmt.Printf("   Difficulté : %s   ·   Étages terminés : %d / 3\n", c.Difficulty, c.FloorsCleared)
+	fmt.Printf("   Monstres vaincus : %d   ·   Morts : %d   ·   Missions : %d / %d\n", c.Victories, c.Deaths, c.QuestIndex, len(quests))
 	pause()
 }
 
-func equipmentLabel(c *Character, item string) string {
-	switch {
-	case item == "":
-		return DarkGray + "— rien, à part du courage —" + Reset
-	case isWeapon(item):
-		return fmt.Sprintf("%s%s%s%s (+%d attaque)%s", White, Bold, item, Orange, weaponBonus(c, item), Reset)
+// gainXP ajoute de l'expérience et fait monter de niveau si besoin.
+// L'XP en trop est gardée pour le niveau suivant.
+func gainXP(c *Character, amount int) {
+	c.XP += amount
+	levelsGained := 0
+	for c.XP >= c.XPMax {
+		c.XP -= c.XPMax
+		c.XPMax = c.XPMax * 3 / 2
+		c.Level++
+		levelsGained++
 	}
-	return fmt.Sprintf("%s%s%s%s (+%d PV)%s", White, Bold, item, Red, gear[item].HP, Reset)
+	fmt.Printf("  %s★ +%d XP   Niv.%d%s %s %d / %d\n", Purple+Bold, amount, c.Level, Reset, bar(c.XP, c.XPMax, 20, Purple), c.XP, c.XPMax)
+	if levelsGained == 0 {
+		return
+	}
+
+	class := classOf(c.Class)
+	c.MaxHP += class.HPGain * levelsGained
+	c.MaxMana += class.ManaGain * levelsGained
+	c.Attack += levelsGained
+	c.HP = c.MaxHP
+	c.Mana = c.MaxMana
+
+	fmt.Println()
+	printArt(artLevelUp, campColors...)
+	section(fmt.Sprintf("Niveau %d !", c.Level))
+	fmt.Printf("   %s♥ +%d PV max   %s♦ +%d mana max   %s» +%d attaque%s\n",
+		Red, class.HPGain*levelsGained, Blue, class.ManaGain*levelsGained, Orange, levelsGained, Reset)
+	success("PV et mana à fond.")
 }
 
-// ------------------------------------------------------------ mort et niveau
-
-// isDead ressuscite le héros au camp s'il est tombé. Renvoie true s'il est mort.
+// isDead ressuscite le héros avec la moitié de ses PV s'il est tombé à 0.
 func isDead(c *Character) bool {
 	if c.HP > 0 {
 		return false
 	}
 	c.Deaths++
-	clearScreen()
-	printArtSlow(artWasted, bloodColors...)
-	fmt.Println()
-	printArt(artTomb, stoneColors...)
-	fmt.Println(Bold + White + centerText("~ "+strings.ToUpper(c.Name)+" ~", 46) + Reset)
-	fmt.Println(Gray + centerText("ci-gît un héros pressé", 46) + Reset)
-	fmt.Println()
-	typewrite(Gray, "Les dieux de DunGo vous renvoient au camp. Ils trouvent l'histoire trop drôle pour qu'elle s'arrête là.")
 	c.HP = c.MaxHP / 2
+	clearScreen()
+	printArt(artTomb, stoneColors...)
+	fmt.Println(Gray + "        ci-gît " + c.Name + ", un héros pressé" + Reset)
+	fmt.Println()
+	paragraph(Gray, "Les dieux de DunGo vous renvoient au camp. Ils trouvent l'histoire trop drôle pour qu'elle s'arrête là.")
 	success("Vous ressuscitez avec %d / %d PV.", c.HP, c.MaxHP)
 	return true
-}
-
-// gainXP ajoute de l'expérience et fait monter de niveau autant que nécessaire.
-func gainXP(c *Character, amount int) {
-	c.XP += amount
-	class, gained := classOf(c.Class), 0
-	for c.XP >= c.XPMax {
-		c.XP -= c.XPMax // l'excédent est conservé pour le niveau suivant
-		c.XPMax = c.XPMax * 3 / 2
-		c.Level++
-		c.MaxHP += class.HPGain
-		c.MaxMana += class.ManaGain
-		c.Attack++
-		gained++
-	}
-	fmt.Printf("  %s★ +%d XP%s   %sNiv.%d%s %s %d / %d\n", Purple+Bold, amount, Reset,
-		Purple+Bold, c.Level, Reset, bar(c.XP, c.XPMax, 20, Purple), c.XP, c.XPMax)
-	if gained == 0 {
-		return
-	}
-
-	c.HP, c.Mana = c.MaxHP, c.MaxMana
-	fmt.Println()
-	printArtSlow(artLevelUp, campColors...)
-	section(fmt.Sprintf("Niveau %d !", c.Level))
-	fmt.Printf("   %s♥ +%d PV max   %s♦ +%d mana max   %s» +%d attaque%s\n",
-		Red, class.HPGain*gained, Blue, class.ManaGain*gained, Orange, gained, Reset)
-	success("PV et mana à fond. Ça fait du bien.")
 }

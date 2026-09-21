@@ -1,0 +1,40 @@
+{
+  "Name": "Test dev",
+  "Class": "Humain",
+  "Level": 1,
+  "MaxHP": 999,
+  "HP": 999,
+  "MaxMana": 999,
+  "Mana": 999,
+  "Attack": 999,
+  "XP": 0,
+  "XPMax": 50,
+  "Gold": 999,
+  "Skills": [
+    "Coup de poing",
+    "Second Souffle"
+  ],
+  "Equipment": {},
+  "Inventory": {
+    "Potion de vie": 99
+  },
+  "InventoryMax": 99,
+  "InventoryUpgrades": 0,
+  "FreePotionTaken": false,
+  "FloorsCleared": 0,
+  "DragonSlain": false,
+  "Victories": 0,
+  "Deaths": 0,
+  "GoldEarned": 0,
+  "TestMode": false,
+  "Difficulty": "Facile",
+  "SaveSlot": 1,
+  "QuestIndex": 0,
+  "QuestActive": false,
+  "QuestProgress": 0,
+  "Bleeding": 0,
+  "Burning": 0,
+  "Stunned": 0,
+  "Weakened": 0,
+  "StoneSkin": 0
+}
