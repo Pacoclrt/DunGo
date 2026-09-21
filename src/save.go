@@ -24,8 +24,7 @@ func saveGame(c *Character) {
 		fail("Impossible d'écrire la sauvegarde : %v", err)
 		return
 	}
-	printArt(artScroll, Brown)
-	success("Partie sauvegardée dans l'emplacement %d.", c.SaveSlot)
+	success("Partie sauvegardée (emplacement %d). Vos exploits sont à l'abri.", c.SaveSlot)
 }
 
 func loadGame(slot int) (*Character, error) {
@@ -50,8 +49,8 @@ func slotSummary(slot int) (string, bool) {
 	if err != nil {
 		return DarkGray + "— vide —" + Reset, false
 	}
-	summary := fmt.Sprintf("%s%s%s · %s niv.%d · %s · étage %d/3",
-		Bold+Gold, c.Name, Reset, c.Class, c.Level, difficultyOf(c.Difficulty).Name, c.FloorsCleared)
+	summary := fmt.Sprintf("%s%s%s · %s · %s · %sniveau %d · étage %d/3%s",
+		Bold+Gold, c.Name, Reset, c.Class, difficultyOf(c.Difficulty).Name, Gray, c.Level, c.FloorsCleared, Reset)
 	if c.DragonSlain {
 		summary += Gold + " · ★ Dragon vaincu" + Reset
 	}
@@ -61,14 +60,14 @@ func slotSummary(slot int) (string, bool) {
 func chooseSlot(title string, mustExist bool) int {
 	for {
 		clearScreen()
-		printArt(artScroll, Brown)
+		printArt(artScroll, campColors...)
 		banner(title, Gold)
 		fmt.Println()
 		for slot := 1; slot <= saveSlots; slot++ {
 			summary, _ := slotSummary(slot)
-			option(slot, fmt.Sprintf("Emplacement %d : %s", slot, summary), White)
+			option(slot, fmt.Sprintf("Emplacement %d : %s", slot, summary))
 		}
-		option(0, "Retour", Gray)
+		back("Retour")
 
 		slot := readChoice(0, saveSlots)
 		if slot == 0 {
@@ -77,11 +76,11 @@ func chooseSlot(title string, mustExist bool) int {
 		_, exists := slotSummary(slot)
 		switch {
 		case mustExist && !exists:
-			fail("Cet emplacement est vide.")
+			fail("Cet emplacement est vide. Aussi vide qu'une crypte pillée.")
 			pause()
 		case !mustExist && exists:
 			warn("Cet emplacement contient déjà une partie.")
-			if ask("L'écraser ?") {
+			if ask("L'écraser ? Elle sera perdue pour toujours.") {
 				return slot
 			}
 		default:

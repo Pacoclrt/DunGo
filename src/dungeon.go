@@ -6,10 +6,12 @@ import (
 	"strings"
 )
 
-// Floor décrit un étage : son ambiance, ses monstres et son boss.
+// Floor décrit un étage : son ambiance, ses monstres et son boss. Chaque étage
+// a sa couleur, que prennent son titre et tous les monstres qu'on y croise.
 type Floor struct {
 	Name     string
 	Intro    string
+	Color    string
 	Colors   []string
 	Rooms    int // la dernière salle contient toujours le boss
 	Monsters []string
@@ -19,15 +21,17 @@ type Floor struct {
 var floors = []Floor{
 	{
 		Name:     "Étage 1 · Les Galeries Gobelines",
-		Intro:    "Des tunnels creusés à coups de griffes. Sur un mur, en lettres maladroites : « GOBELINS ICI CHEZ NOUS. HUMAINS DEHORS. SAUF SI HUMAINS DONNER Y-COINS. »",
-		Colors:   poisonColors,
+		Intro:    "Des tunnels qui sentent la chaussette. Un panneau gobelin : « HUMAINS DEHORS. SAUF SI HUMAINS DONNER Y-COINS. » Tout au fond : Grukk, le Roi Gobelin.",
+		Color:    Green,
+		Colors:   mossColors,
 		Rooms:    5,
 		Monsters: []string{"goblin", "wolf", "raven", "boar"},
 		Boss:     "goblin_king",
 	},
 	{
 		Name:     "Étage 2 · Les Cryptes Englouties",
-		Intro:    "La chaleur du dragon a fait fondre les glaciers. Dans l'eau noire, des os s'entrechoquent… et une voix glaciale murmure votre nom.",
+		Intro:    "Des cryptes inondées et des squelettes qui claquent des dents (de froid ?). Tout au fond : Mor'Vath, une liche qui adore voler le mana des autres.",
+		Color:    Sky,
 		Colors:   iceColors,
 		Rooms:    6,
 		Monsters: []string{"skeleton", "troll", "boar", "raven"},
@@ -35,7 +39,8 @@ var floors = []Floor{
 	},
 	{
 		Name:     "Étage 3 · L'Antre d'Ignarok",
-		Intro:    "L'air brûle. Le sol tremble. Une inscription naine à moitié fondue : « Quand le Fléau inspire, que le brave se protège… ou boive. »",
+		Intro:    "Il fait chaud. Très chaud. Au fond, quelque chose ronfle : c'est Ignarok. Réveillez-le poliment… à coups d'épée.",
+		Color:    Orange,
 		Colors:   fireColors,
 		Rooms:    5,
 		Monsters: []string{"krokmou", "troll", "skeleton"},
@@ -46,29 +51,28 @@ var floors = []Floor{
 func exploreDungeon(c *Character) {
 	clearScreen()
 	printArt(artDungeonGate, stoneColors...)
-	banner("L'ENTRÉE DU DONJON DE KARAK-DÛM", Silver)
+	banner("LE DONJON", Gold)
 	showStatus(c)
-	fmt.Println()
+	section("Où aller ?")
 
 	for i, floor := range floors {
 		status, color := DarkGray+"■ verrouillé", DarkGray
 		switch {
 		case i < c.FloorsCleared:
-			status, color = Green+"√ terminé", Green
+			status, color = Green+"√ terminé", floor.Color
 		case i == c.FloorsCleared:
-			status, color = Yellow+"► à explorer", floor.Colors[1]
+			status, color = Gold+"► boss : "+bestiary[floor.Boss].Name, floor.Color
 		}
-		fmt.Printf("   %s[%d]%s %s%-36s%s %s%s\n", Gold+Bold, i+1, Reset, color+Bold, floor.Name, Reset, status, Reset)
+		fmt.Printf("   %s[%d]%s %s%-34s%s %s%s\n", Gold+Bold, i+1, Reset, color+Bold, floor.Name, Reset, status, Reset)
 	}
-	fmt.Println()
-	option(0, "Retour au camp", Gray)
+	back("Retour au camp")
 
 	choice := readChoice(0, len(floors))
 	if choice == 0 {
 		return
 	}
 	if choice-1 > c.FloorsCleared {
-		fail("Terminez d'abord l'étage %d !", c.FloorsCleared+1)
+		fail("Terminez d'abord l'étage %d ! Le dragon n'est pas si pressé.", c.FloorsCleared+1)
 		pause()
 		return
 	}
@@ -86,7 +90,7 @@ func roomTrail(room, total int) string {
 		case i < room:
 			trail += Green + "[√]" + Reset
 		case i == room:
-			trail += Yellow + Bold + "[►]" + Reset
+			trail += Gold + Bold + "[►]" + Reset
 		case i == total:
 			trail += Red + Bold + "[☠]" + Reset
 		default:
@@ -102,10 +106,11 @@ func exploreFloor(c *Character, index int) {
 	floor := floors[index]
 
 	clearScreen()
-	dots("Vous descendez les marches glissantes", Gray)
-	printArtSlow(artStairs, floor.Colors...)
-	banner(floor.Name, Gold)
-	typewrite(floor.Colors[1]+Italic, floor.Intro)
+	dots("Vous descendez les marches, en évitant la troisième qui grince", Gray)
+	fmt.Println()
+	banner(floor.Name, floor.Color)
+	fmt.Println()
+	typewrite(floor.Color+Italic, floor.Intro)
 	pause()
 
 	for room := 1; room <= floor.Rooms; room++ {
@@ -123,20 +128,24 @@ func exploreFloor(c *Character, index int) {
 				kind = floor.Boss
 			}
 			m := newMonster(kind, c.Difficulty)
+			m.Color, m.Colors = floor.Color, floor.Colors
 			if isBossRoom {
 				bossIntro(m)
 			}
 
 			clearScreen()
-			banner(fmt.Sprintf("%s · Salle %d / %d", floor.Name, room, floor.Rooms), Gold)
+			banner(fmt.Sprintf("%s · Salle %d / %d", floor.Name, room, floor.Rooms), floor.Color)
 			fmt.Println(roomTrail(room, floor.Rooms))
 			fmt.Println()
 			printArt(m.Art, m.Color)
-			fmt.Printf("\n  %s%s surgit !%s\n", Bold+m.Color, m.Name, Reset)
-			fmt.Printf("  %s♥ %d PV   » %d attaque   » %d initiative%s\n\n", Gray, m.MaxHP, m.Attack, m.Initiative, Reset)
+			fmt.Printf("\n  %s%s surgit !%s  %s♥ %d PV · » %d attaque%s\n", Bold+m.Color, m.Name, Reset, Gray, m.MaxHP, m.Attack, Reset)
+			if !isBossRoom {
+				fmt.Println("  " + Gray + Italic + "« " + m.Cry + " »" + Reset)
+			}
+			fmt.Println()
 			showStatus(c)
-			option(1, "Combattre", Red)
-			option(2, "Fuir vers le camp", Gray)
+			option(1, "Combattre")
+			option(2, "Fuir vers le camp")
 			if readChoice(1, 2) == 2 || fight(c, m, false) != Victory {
 				return
 			}
@@ -144,13 +153,13 @@ func exploreFloor(c *Character, index int) {
 
 		if !isBossRoom {
 			clearScreen()
-			banner(floor.Name, Gold)
+			banner(floor.Name, floor.Color)
 			fmt.Println(roomTrail(room+1, floor.Rooms))
 			fmt.Println()
 			success("Salle %d / %d terminée !", room, floor.Rooms)
 			showStatus(c)
-			option(1, "Continuer vers la salle suivante", Yellow)
-			option(2, "Remonter au camp", Gray)
+			option(1, "Salle suivante")
+			optionHint(2, "Retour au camp", "l'étage recommencera du début")
 			if readChoice(1, 2) == 2 {
 				return
 			}
@@ -163,18 +172,16 @@ func exploreFloor(c *Character, index int) {
 		return
 	}
 	clearScreen()
-	printArt(artTrophy, goldColors...)
-	banner(floor.Name+" : TERMINÉ !", Green)
-	success("Le boss est vaincu. L'étage suivant est débloqué !")
+	printArt(artTrophy, campColors...)
+	banner(fmt.Sprintf("ÉTAGE %d TERMINÉ !", index+1), Gold)
+	success("Boss vaincu ! L'étage %d est débloqué.", index+2)
 	pause()
 }
 
 func bossIntro(m *Monster) {
 	clearScreen()
-	warn("Le sol tremble…")
-	wait(800)
-	warn("Une présence terrifiante approche…")
-	wait(800)
+	warn("Le sol tremble… Quelque chose de très gros approche.")
+	wait(1500)
 	clearScreen()
 	banner("☠ BOSS : "+strings.ToUpper(m.Name)+" ☠", Red)
 	fmt.Println()
@@ -187,12 +194,12 @@ func bossIntro(m *Monster) {
 func victoryScreen(c *Character) {
 	c.DragonSlain = true
 	clearScreen()
-	printArtSlow(artVictory, goldColors...)
+	printArtSlow(artVictory, campColors...)
 	fmt.Println()
-	printArt(artTrophy, goldColors...)
-	typewrite(Gold, fmt.Sprintf("Ignarok s'effondre dans un fracas qui fait trembler la montagne. Au camp, on grave enfin un nom sur la treizième stèle : %s, Tueur de Dragon.", c.Name))
+	printArt(artTrophy, campColors...)
+	typewrite(Gold, fmt.Sprintf("Ignarok s'effondre dans un dernier ronflement. Au village, tout le monde peut enfin dormir. On grave votre nom sur la grande place : %s, Terreur des Dragons. On vous offre aussi un mouton. Il n'a rien demandé.", c.Name))
 
-	section("Vos exploits", Gold)
+	section("Vos exploits")
 	for _, line := range [][2]string{
 		{"Difficulté", difficultyOf(c.Difficulty).Name},
 		{"Niveau atteint", fmt.Sprint(c.Level)},

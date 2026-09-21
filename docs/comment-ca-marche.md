@@ -40,20 +40,21 @@ Le parcours complet :
 main()
  └─ titleScreen()                    écran titre
      ├─ newGame() / continueGame()
+     │   ├─ intro()                  prologue et carte du chemin (nouvelle partie)
      │   └─ campMenu()               LE CAMP  ← on y revient toujours
-     │       ├─ displayInfo()        fiche du héros
-     │       ├─ accessInventory()    sac, potions, équipement
-     │       ├─ merchant()           acheter / vendre
-     │       ├─ blacksmith()         forger
-     │       ├─ missionBoard()       contrats de chasse
-     │       ├─ trainingFight()      arène (combat sans enjeu)
      │       ├─ exploreDungeon()     choix de l'étage
      │       │   └─ exploreFloor()   suite de salles
-     │       │       ├─ roomEvent()  fontaine / colporteur / sphinx
+     │       │       ├─ roomEvent()  fontaine / sphinx
      │       │       └─ fight()      combat tour par tour
+     │       ├─ merchant()           acheter / vendre
+     │       ├─ blacksmith()         les 4 étals de la forge
+     │       │   └─ forgeShelf()     les 3 recettes d'un étal
+     │       ├─ missionBoard()       contrats de chasse
+     │       ├─ trainingFight()      arène (combat sans enjeu)
+     │       ├─ accessInventory()    sac, potions, équipement
+     │       ├─ displayInfo()        fiche du héros
      │       └─ saveGame()
-     ├─ howToPlay()
-     └─ whoAreThey()
+     └─ credits()
 ```
 
 Une fonction d'écran ne rend la main que lorsque le joueur choisit « Retour ».
@@ -66,18 +67,18 @@ C'est ce qui donne la pile : `campMenu` appelle `merchant`, qui appelle
 
 | Fichier | Rôle |
 |---|---|
-| `main.go` | Écran titre, menu du camp, aide, prologue. Contient les **tables de menus**. |
-| `character.go` | Le héros : structure `Character`, lignées, création, niveaux, mort, fiche. |
+| `main.go` | Écran titre, prologue, menu du camp, crédits. Contient les **tables de menus**. |
+| `character.go` | Le héros : structure `Character`, classes, création, niveaux, mort, fiche. |
 | `monster.go` | Le bestiaire : structure `Monster` et les statistiques de chaque créature. |
 | `combat.go` | La boucle de combat, les sorts, les dégâts, les schémas d'attaque des boss. |
 | `status.go` | Les effets temporaires : saignement, brûlure, étourdissement, affaiblissement. |
 | `inventory.go` | Le sac, la table `items`, l'usage des objets. |
 | `equipment.go` | Les armures et les armes (table `gear`), les emplacements portés. |
 | `merchant.go` | Mordecai : achat et revente. |
-| `forge.go` | Borin : les recettes et la fabrication. |
+| `forge.go` | Borin : les étals de recettes et la fabrication. |
 | `missions.go` | Les contrats de chasse et leur progression. |
 | `dungeon.go` | Les étages, les salles, l'entrée en scène des boss, l'écran de victoire. |
-| `events.go` | Fontaine, marchand ambulant et énigmes du sphinx. |
+| `events.go` | Fontaine et énigmes du sphinx. |
 | `save.go` | Sauvegarde et chargement JSON, les 3 emplacements. |
 | `utils.go` | **La boîte à outils d'affichage** : couleurs, dessins, cadres, jauges, saisie. |
 | `ascii.go` | Uniquement des constantes : tous les dessins, en braille. |
@@ -95,7 +96,7 @@ table ; on ne touche presque jamais à la logique.
 C'est **la seule structure sauvegardée sur disque**. Tout ce qui doit survivre
 à un « Continuer » doit y être ajouté. Elle regroupe :
 
-- les caractéristiques (`HP`, `MaxHP`, `Mana`, `Attack`, `Initiative`, `XP`…) ;
+- les caractéristiques (`HP`, `MaxHP`, `Mana`, `Attack`, `XP`, `Level`…) ;
 - ce que le héros possède (`Inventory`, `Equipment`, `Gold`, `Skills`) ;
 - la progression (`FloorsCleared`, `Victories`, `Deaths`, `QuestIndex`…) ;
 - les effets temporaires (`Bleeding`, `Burning`, `Stunned`, `Weakened`,
@@ -104,25 +105,25 @@ C'est **la seule structure sauvegardée sur disque**. Tout ce qui doit survivre
 Deux petites méthodes évitent des répétitions partout :
 `c.knows(sort)` et `c.canCast(sort)`.
 
-### `Class` — les trois lignées (`character.go`)
+### `Class` — les trois classes (`character.go`)
 
 ```go
 var classes = []Class{
-    {"Humain", 100, 40, 10, SpellSecondWind, "Polyvalent, se soigne", Sky, artHuman, 10, 5},
+    {"Humain", 100, 40, SpellSecondWind, "Polyvalent, se soigne", Sky, artHuman, 10, 5},
     ...
 }
 ```
 
-Une ligne = une lignée jouable : PV, mana, initiative, sort de départ, couleur,
+Une ligne = une classe jouable : PV, mana, sort de départ, résumé, couleur,
 portrait et gains par niveau.
 
 ### `Difficulty` — Facile / Normal / Difficile (`character.go`)
 
 ```go
 var difficulties = []Difficulty{
-    {"Facile", "Monstres affaiblis (-25 % de PV et d'attaque)", Green, 75, 100},
-    {"Normal", "L'aventure telle qu'elle a été pensée", Yellow, 100, 100},
-    {"Difficile", "Monstres renforcés (+30 %), mais +50 % d'XP et de Y-Coins", Red, 130, 150},
+    {"Facile", "Monstres affaiblis (-25 % de PV et d'attaque). Pas de honte.", Green, 75, 100},
+    {"Normal", "L'aventure telle qu'on l'a imaginée", Gold, 100, 100},
+    {"Difficile", "Monstres +30 %, mais +50 % d'XP et de Y-Coins. Courage.", Red, 130, 150},
 }
 ```
 
@@ -133,14 +134,19 @@ donc pas se contredire.
 ### `Monster` — le bestiaire (`monster.go`)
 
 ```go
-"troll": {Name: "Troll des cavernes", MaxHP: 85, Attack: 12, Initiative: 4,
-          XP: 55, Gold: 14, Drop: ItemTrollSkin, DropChance: 75,
-          Effect: EffectStun, Art: artTroll, Color: Green, Cry: "..."},
+"troll": {Name: "Troll des cavernes", MaxHP: 85, Attack: 12, XP: 55, Gold: 14,
+          Drop: ItemTrollSkin, DropChance: 75, Effect: EffectStun,
+          Hit: "vous écrase", Art: artTroll, Cry: "..."},
 ```
 
 `newMonster(kind, difficulty)` renvoie une **copie** de l'entrée du bestiaire,
 mise à l'échelle de la difficulté. Le bestiaire lui-même n'est jamais modifié :
 c'est pour cela qu'on peut affronter dix trolls d'affilée.
+
+Le bestiaire ne contient **pas de couleur** : un monstre prend celles de
+l'étage où il apparaît (`m.Color, m.Colors = floor.Color, floor.Colors` dans
+`exploreFloor`). Le champ `Hit` est le verbe du journal de combat
+(« Troll des cavernes **vous écrase** : -12 PV »).
 
 Le champ `Pattern` est une **fonction** : c'est la façon d'attaquer du monstre.
 S'il vaut `nil`, le monstre utilise `basicPattern` (attaque doublée tous les
@@ -153,7 +159,7 @@ Deux tables, deux natures d'objets :
 
 - `items` décrit ce qui se consomme ou se revend : catégorie, couleur, prix
   chez Mordecai, et `InFight` (utilisable en plein combat) ;
-- `gear` décrit ce qui se porte : emplacement, PV, attaque, lignée de l'arme.
+- `gear` décrit ce qui se porte : emplacement, PV, attaque, classe de l'arme.
 
 Le sac lui-même est une simple `map[string]int` : nom de l'objet → quantité.
 
@@ -169,7 +175,9 @@ optionnelle pour tout le reste (soigner, enflammer, protéger).
 
 ### `Floor`, `Quest`, `Recipe`, `Riddle`
 
-Mêmes principes : une table, une ligne par contenu.
+Mêmes principes : une table, une ligne par contenu. Seule la forge ajoute un
+niveau : `forgeShelves` range les `Recipe` par **étal** (armures de
+l'aventurier, armures de maître…), et chaque étal est un petit menu.
 
 ---
 
@@ -178,7 +186,22 @@ Mêmes principes : une table, une ligne par contenu.
 C'est le fichier le plus utilisé du projet. Tout l'affichage passe par lui,
 ce qui garantit que le jeu a partout le même style.
 
-### Couleurs
+### Couleurs et direction artistique
+
+Le jeu suit une direction artistique simple, « l'or du camp, la pierre du
+donjon » :
+
+| Rôle | Couleur |
+|---|---|
+| Titres, numéros des menus, Y-Coins | **or** (`Gold`) |
+| Texte, explications, cadres, `[0] Retour` | neutres (`White` → `DarkGray`) |
+| ♥ PV · ♦ mana · ★ XP et niveau | rouge · bleu · violet, partout |
+| Réussite · échec · avertissement | vert · rouge · orange |
+| Le camp et ses habitants | dégradé doré `campColors` |
+| Étage 1 · 2 · 3 (titres et monstres) | `mossColors` · `iceColors` · `fireColors` |
+
+Avant d'ajouter une couleur, se demander à quel rôle elle correspond : s'il en
+existe déjà un, on réutilise sa couleur.
 
 Les couleurs sont des **codes ANSI** : des chaînes que le terminal interprète
 au lieu de les afficher.
@@ -191,15 +214,16 @@ const Reset = "\033[0m"        // reviens à la couleur normale
 Règle d'or : **toute couleur ouverte doit être refermée par `Reset`** sur la
 même ligne. Sinon la couleur « bave » sur le texte suivant.
 
-Les **dégradés** sont de simples listes de couleurs (`fireColors`,
-`iceColors`, `goldColors`, `steelColors`…) appliquées du haut vers le bas d'un
-dessin.
+Les **dégradés** sont de simples listes de couleurs (`campColors`,
+`stoneColors`, `mossColors`, `iceColors`, `fireColors`, `bloodColors`)
+appliquées du haut vers le bas d'un dessin : un dessin prend le dégradé du lieu
+où il apparaît.
 
 ### Dessins
 
 ```go
-printArt(artMerchant, goldColors...)   // dégradé doré
-printArt(artBag, Brown)                // une seule couleur = uni
+printArt(artMerchant, campColors...)   // dégradé doré du camp
+printArt(artPotion, Red)               // une seule couleur = uni
 printArtSlow(artLogo, fireColors...)   // apparition ligne par ligne
 ```
 
@@ -228,9 +252,11 @@ Le terminal fait environ 80 colonnes. Les textes longs sont repliés à
 
 | Fonction | Ce qu'elle dessine |
 |---|---|
-| `banner(texte, couleur)` | Le cadre `╔═══╗` des titres d'écran |
-| `section(texte, couleur)` | Le séparateur `── Titre ────────` |
-| `option(n, libellé, couleur)` | Une entrée de menu `[1] Attaquer` |
+| `banner(texte, couleur)` | Le cadre `╔═══╗` des titres d'écran : or au camp, couleur de l'étage au donjon, rouge pour un boss |
+| `section(texte)` | Le séparateur `── Titre ────────` |
+| `option(n, libellé)` | Une entrée de menu `[1] Attaquer` |
+| `optionHint(n, libellé, aide)` | Une entrée de menu suivie d'une courte explication grise |
+| `back(libellé)` | L'entrée `[0] Retour`, toujours en dernier |
 | `itemLine(n, nom, couleur, détail)` | Une ligne de liste d'objets |
 | `bar(actuel, max, largeur, couleur)` | Une jauge `████░░░░` |
 | `hpBar(...)` | Une jauge de PV qui passe du vert au rouge |
@@ -269,7 +295,7 @@ Deux contraintes à respecter en ajoutant un dessin :
    (dessin + jauges + menu ≈ 15 lignes d'interface) ne tient plus dans une
    fenêtre courte.
 
-Les portraits des lignées sont un cas à part : `sideBySide` les affiche en
+Les portraits des classes sont un cas à part : `sideBySide` les affiche en
 trois colonnes de 24 caractères, ils doivent donc rester sous cette largeur.
 
 ---
@@ -280,14 +306,14 @@ trois colonnes de 24 caractères, ils doivent donc rester sous cette largeur.
 fight(héros, monstre, entraînement)
  │
  ├─ clearEffects        on nettoie les effets du combat précédent
- ├─ initiative          le plus rapide commencera
  │
  └─ pour chaque tour :
      ├─ showFight       dessin du monstre, jauges, effets
-     ├─ tour du plus rapide, puis tour de l'autre
-     │   ├─ characterTurn : Attaquer / Sorts / Inventaire / Fuir
-     │   └─ monsterTurn   : m.Pattern, ou basicPattern par défaut
-     ├─ après chaque demi-tour : fightOver ? (victoire, défaite)
+     ├─ characterTurn   le héros joue toujours en premier :
+     │                  Attaquer / Sorts / Objets / Fuir
+     ├─ fightOver ?     (victoire, défaite)
+     ├─ monsterTurn     m.Pattern, ou basicPattern par défaut
+     ├─ fightOver ?
      ├─ updateEffects   saignement, brûlure : dégâts de fin de tour
      └─ fightOver ?
 ```
@@ -301,7 +327,8 @@ Quelques règles utiles à connaître :
 - **attaque puissante** : tous les 3 tours, le monstre frappe deux fois plus
   fort et inflige son `Effect` ;
 - **l'arène ne rapporte rien** : ni Y-Coins, ni XP, ni victoire comptabilisée —
-  sinon on y gagnerait des niveaux sans aucun risque. On n'y meurt pas non plus ;
+  sinon on y gagnerait des niveaux sans aucun risque. On n'y meurt pas non plus,
+  et `trainingFight` rend au héros ses PV et son mana d'avant le combat ;
 - **les boss ne peuvent pas être fuis** (`flee` refuse si `m.IsBoss`).
 
 ---
@@ -342,7 +369,8 @@ renseigner dans le champ `Pattern`.
 ### Une arme ou une armure
 
 1. Une constante et une ligne dans `gear` (`equipment.go`).
-2. Une ligne dans `recipes` (`forge.go`) pour pouvoir la fabriquer.
+2. Une ligne dans l'étal qui convient de `forgeShelves` (`forge.go`) pour
+   pouvoir la fabriquer.
 
 ### Une mission
 
@@ -352,15 +380,16 @@ Une ligne dans `quests` (`missions.go`). Le champ `Target` doit contenir le
 
 ### Un étage
 
-Une ligne dans `floors` (`dungeon.go`) : nom, texte d'ambiance, dégradé, nombre
-de salles, liste des monstres et clé du boss.
+Une ligne dans `floors` (`dungeon.go`) : nom, texte d'ambiance, couleur et
+dégradé (que prendront ses monstres), nombre de salles, liste des monstres et
+clé du boss.
 
 ### Un sort
 
 1. Une constante `SpellX` dans `character.go`.
 2. Une ligne dans `spells` (`combat.go`). `Damage` suffit pour un sort
    offensif ; sinon écrire une fonction et la mettre dans `Extra`.
-3. Le donner au héros : via une lignée (`classes`) ou un objet.
+3. Le donner au héros : via une classe (`classes`) ou un objet.
 
 ---
 

@@ -17,16 +17,16 @@ func applyEffect(c *Character, effect string) {
 	switch effect {
 	case EffectBleed:
 		c.Bleeding = 3
-		warn("Vous saignez ! -3 PV à la fin de chaque tour, pendant 3 tours.")
+		warn("Vous saignez ! (-3 PV par tour, 3 tours)")
 	case EffectBurn:
 		c.Burning = 3
-		warn("Vous brûlez ! -5 PV à la fin de chaque tour, pendant 3 tours.")
+		warn("Vous brûlez ! (-5 PV par tour, 3 tours)")
 	case EffectStun:
 		c.Stunned = 1
-		warn("Vous êtes étourdi ! Vous passerez votre prochain tour.")
+		warn("Vous êtes étourdi ! (vous passez votre prochain tour)")
 	case EffectWeaken:
 		c.Weakened = 3
-		warn("Vous êtes affaibli ! Vos 3 prochaines attaques font moitié moins de dégâts.")
+		warn("Vous êtes affaibli ! (vos 3 prochaines attaques ÷ 2)")
 	}
 }
 
@@ -35,20 +35,16 @@ func updateEffects(c *Character, m *Monster) {
 	if c.Bleeding > 0 {
 		c.Bleeding--
 		c.HP = max(c.HP-3, 0)
-		fmt.Printf("  %s♦ Saignement : -3 PV%s\n", Red, Reset)
-		showHP("", c.HP, c.MaxHP)
+		fmt.Printf("  %s« Saignement : -3 PV%s\n", Red, Reset)
 	}
 	if c.Burning > 0 {
 		c.Burning--
 		c.HP = max(c.HP-5, 0)
-		fmt.Printf("  %s♦ Brûlure : -5 PV%s\n", Orange, Reset)
-		showHP("", c.HP, c.MaxHP)
+		fmt.Printf("  %s« Brûlure : -5 PV%s\n", Orange, Reset)
 	}
 	if m.Burning > 0 {
 		m.Burning--
-		m.HP = max(m.HP-5, 0)
-		fmt.Printf("  %s♦ %s brûle : -5 PV%s\n", Orange, m.Name, Reset)
-		showHP(m.Name, m.HP, m.MaxHP)
+		hurtMonster(m, 5, Orange+"  (brûlure)"+Reset)
 	}
 }
 

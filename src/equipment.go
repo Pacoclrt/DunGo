@@ -43,7 +43,7 @@ const (
 )
 
 // Gear décrit un objet qui se porte : une armure donne des PV, une arme
-// de l'attaque. Class indique la lignée à laquelle l'arme est destinée.
+// de l'attaque. Class indique la classe à laquelle l'arme est destinée.
 type Gear struct {
 	Slot   string
 	HP     int
@@ -76,7 +76,7 @@ func isWeapon(item string) bool {
 	return gear[item].Slot == "Arme"
 }
 
-// weaponBonus ajoute +2 attaque si l'arme est faite pour la lignée du héros.
+// weaponBonus ajoute +2 attaque si l'arme est faite pour la classe du héros.
 func weaponBonus(c *Character, item string) int {
 	if isWeapon(item) && gear[item].Class == c.Class {
 		return gear[item].Attack + 2
@@ -93,7 +93,7 @@ func itemBonusText(item string) string {
 
 func itemSlotText(item string) string {
 	if isWeapon(item) {
-		return "Arme · " + gear[item].Class
+		return "pour " + gear[item].Class
 	}
 	return gear[item].Slot
 }
@@ -106,7 +106,7 @@ func equipItem(c *Character, item string) {
 		c.MaxHP -= gear[old].HP
 		c.Attack -= weaponBonus(c, old)
 		addInventory(c, old, 1) // la place libérée juste avant suffit
-		info("%s retourne dans votre sac.", old)
+		info("%s retourne au fond du sac.", old)
 	}
 	*worn = item
 	c.MaxHP += gear[item].HP
@@ -114,16 +114,16 @@ func equipItem(c *Character, item string) {
 	c.Attack += weaponBonus(c, item)
 
 	if !isWeapon(item) {
-		printArt(artShield, steelColors...)
-		success("Vous équipez %s (%s, +%d PV max).", item, gear[item].Slot, gear[item].HP)
+		printArt(artShield, stoneColors...)
+		success("Vous enfilez %s (%s, +%d PV max). Ça vous va très bien.", item, gear[item].Slot, gear[item].HP)
 		showHP("", c.HP, c.MaxHP)
 		return
 	}
-	printArt(artSword, steelColors...)
+	printArt(artSword, stoneColors...)
 	success("Vous équipez %s : +%d attaque (attaque totale : %d).", item, weaponBonus(c, item), c.Attack)
 	if gear[item].Class == c.Class {
-		info("Arme de votre lignée : +2 attaque bonus !")
+		info("Arme de votre classe : +2 attaque bonus !")
 	} else {
-		warn("Cette arme est faite pour un %s : vous ne profitez pas du bonus de lignée.", gear[item].Class)
+		warn("Arme prévue pour la classe %s : pas de bonus. Vous la tenez peut-être à l'envers.", gear[item].Class)
 	}
 }

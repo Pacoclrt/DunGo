@@ -25,94 +25,52 @@ var riddles = []Riddle{
 // quand même avoir lieu (énigme ratée).
 func roomEvent(c *Character, floorIndex int) bool {
 	clearScreen()
-	switch rand.IntN(3) {
-	case 0:
-		fountainEvent(c)
-	case 1:
-		peddlerEvent(c)
-	default:
-		return !riddleEvent(c, floorIndex)
+	if rand.IntN(2) == 0 {
+		fountainEvent(c, floorIndex)
+		return false
 	}
-	return false
+	return !riddleEvent(c, floorIndex)
 }
 
-func fountainEvent(c *Character) {
-	printArt(artFountain, iceColors...)
-	banner("UNE FONTAINE MAGIQUE", Cyan)
-	paragraph(Sky+Italic, "Une eau claire et lumineuse coule au milieu des ténèbres…")
+func fountainEvent(c *Character, floorIndex int) {
+	floor := floors[floorIndex]
+	printArt(artFountain, floor.Colors...)
+	banner("UNE FONTAINE MAGIQUE", floor.Color)
+	paragraph(Silver+Italic, "Une eau claire et lumineuse coule au milieu des ténèbres. Elle a un petit goût de menthe.")
 	c.HP = min(c.HP+c.MaxHP/2, c.MaxHP)
 	c.Mana = min(c.Mana+c.MaxMana/2, c.MaxMana)
-	success("Vous buvez à la fontaine : PV et mana en partie restaurés !")
+	success("Vous buvez : PV et mana en partie restaurés !")
 	showStatus(c)
 	pause()
 }
 
-// peddlerEvent : les mêmes potions qu'au camp, mais au double du prix.
-func peddlerEvent(c *Character) {
-	offers := []string{ItemHealthPotion, ItemManaPotion, ItemPoisonPotion}
-	greeting := "Pssst… Des potions, l'ami ? Un peu chères, mais ici, pas de concurrence !"
-
-	for {
-		clearScreen()
-		printArt(artPeddler, goldColors...)
-		banner("UN MARCHAND AMBULANT", Gold)
-		say("Filou le colporteur", Gold, greeting)
-		greeting = "Autre chose avant que je file ?"
-		showStatus(c)
-
-		for i, item := range offers {
-			itemLine(i+1, item, itemColor(item), fmt.Sprintf("%s%d Y-Coins%s", Gold, peddlerPrice(item), Reset))
-		}
-		fmt.Println()
-		option(0, "Continuer l'exploration", Gray)
-
-		choice := readChoice(0, len(offers))
-		if choice == 0 {
-			return
-		}
-		item, price := offers[choice-1], peddlerPrice(offers[choice-1])
-		fmt.Println()
-		if c.Gold < price {
-			fail("Il vous manque %d Y-Coins.", price-c.Gold)
-		} else if addInventory(c, item, 1) {
-			c.Gold -= price
-			success("Vous achetez : %s (-%d Y-Coins)", item, price)
-		}
-		pause()
-	}
-}
-
-func peddlerPrice(item string) int {
-	return items[item].Price * 2
-}
-
 // riddleEvent renvoie true si le joueur a trouvé la bonne réponse.
 func riddleEvent(c *Character, floorIndex int) bool {
-	riddle := riddles[rand.IntN(len(riddles))]
-	printArt(artSphinx, Yellow, Gold, Brown, Brown)
-	banner("LE SPHINX DE PIERRE", Yellow)
-	say("Le Sphinx", Yellow, "Réponds à mon énigme, voyageur. Une erreur… et tu le regretteras.")
+	riddle, floor := riddles[rand.IntN(len(riddles))], floors[floorIndex]
+	printArt(artSphinx, floor.Colors...)
+	banner("LE SPHINX", floor.Color)
+	say("Le Sphinx", floor.Color, "Réponds à mon énigme, voyageur. Une erreur… et tu le regretteras.")
 	fmt.Println()
 	paragraph(Bold, riddle.Question)
 	fmt.Println()
 	for i, answer := range riddle.Answers {
-		option(i+1, answer, White)
+		option(i+1, answer)
 	}
 
 	if readChoice(1, len(riddle.Answers)) != riddle.Correct {
 		fmt.Println()
-		fail("Mauvaise réponse ! La bonne réponse était : %s", riddle.Answers[riddle.Correct-1])
-		say("Le Sphinx", Yellow, "Hé hé hé… Un monstre va s'occuper de toi.")
+		fail("Raté ! La bonne réponse était : %s", riddle.Answers[riddle.Correct-1])
+		say("Le Sphinx", floor.Color, "Hé hé hé… Un ami monstre veut te dire bonjour.")
 		pause()
 		return false
 	}
 
 	reward := 15 * (floorIndex + 1)
 	fmt.Println()
-	printArt(artCoins, goldColors...)
-	success("Bonne réponse ! Le sphinx vous laisse passer avec %d Y-Coins.", reward)
+	printArt(artCoins, campColors...)
 	c.Gold += reward
 	c.GoldEarned += reward
+	success("Bonne réponse ! Le sphinx boude, mais vous laisse passer avec %d Y-Coins.", reward)
 	gainXP(c, 10*(floorIndex+1))
 	pause()
 	return true

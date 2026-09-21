@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-// Quest : un contrat de chasse, proposé une fois l'précédent terminé.
+// Quest : un contrat de chasse, proposé une fois le précédent terminé.
 type Quest struct {
 	Title       string
 	Description string
@@ -22,7 +22,7 @@ var quests = []Quest{
 
 func missionBoard(c *Character) {
 	clearScreen()
-	printArt(artQuestBoard, Brown, Gold, Gold, Brown)
+	printArt(artQuestBoard, campColors...)
 	banner("MISSIONS", Gold)
 
 	if c.QuestIndex >= len(quests) {
@@ -33,7 +33,7 @@ func missionBoard(c *Character) {
 	}
 
 	quest := quests[c.QuestIndex]
-	section(fmt.Sprintf("Mission %d / %d : %s", c.QuestIndex+1, len(quests), quest.Title), Gold)
+	section(fmt.Sprintf("Mission %d / %d : %s", c.QuestIndex+1, len(quests), quest.Title))
 	paragraph(Italic, quest.Description)
 	fmt.Printf("   Objectif : vaincre %s%d × %s%s\n", Bold, quest.Goal, quest.Target, Reset)
 	fmt.Printf("   Récompense : %s%d Y-Coins%s et %s%d XP%s\n", Gold+Bold, quest.Reward, Reset, Purple+Bold, quest.XP, Reset)
@@ -41,27 +41,27 @@ func missionBoard(c *Character) {
 	switch {
 	case !c.QuestActive:
 		fmt.Println()
-		option(1, "Accepter la mission", Green)
-		option(0, "Retour au camp", Gray)
+		option(1, "Accepter la mission")
+		back("Retour au camp")
 		if readChoice(0, 1) == 1 {
 			c.QuestActive, c.QuestProgress = true, 0
-			success("Mission acceptée : %s", quest.Title)
+			success("Mission acceptée ! Le camp compte sur vous. Enfin, un peu.")
 			pause()
 		}
 
 	case c.QuestProgress >= quest.Goal:
 		showProgress(c, quest, Green)
 		fmt.Println()
-		option(1, "Réclamer la récompense", Gold)
-		option(0, "Retour au camp", Gray)
+		option(1, "Réclamer la récompense")
+		back("Retour au camp")
 		if readChoice(0, 1) == 1 {
 			completeQuest(c, quest)
 			pause()
 		}
 
 	default:
-		showProgress(c, quest, Yellow)
-		info("Mission en cours. Revenez quand l'objectif sera atteint !")
+		showProgress(c, quest, Gold)
+		info("Mission en cours. Les monstres ne vont pas se chasser tout seuls !")
 		pause()
 	}
 }
@@ -71,7 +71,7 @@ func showProgress(c *Character, quest Quest, color string) {
 }
 
 func completeQuest(c *Character, quest Quest) {
-	printArt(artCoins, goldColors...)
+	printArt(artCoins, campColors...)
 	c.Gold += quest.Reward
 	c.GoldEarned += quest.Reward
 	success("Mission « %s » terminée ! +%d Y-Coins", quest.Title, quest.Reward)
@@ -94,6 +94,6 @@ func updateQuest(c *Character, monsterName string) {
 	c.QuestProgress++
 	info("Mission « %s » : %d / %d", quest.Title, c.QuestProgress, quest.Goal)
 	if c.QuestProgress >= quest.Goal {
-		success("Objectif atteint ! Réclamez votre récompense au tableau des missions.")
+		success("Objectif atteint ! Passez au tableau des missions pour toucher la prime.")
 	}
 }

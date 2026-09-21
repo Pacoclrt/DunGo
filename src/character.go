@@ -17,7 +17,6 @@ type Character struct {
 	MaxMana      int
 	Mana         int
 	Attack       int
-	Initiative   int
 	XP           int
 	XPMax        int
 	Gold         int
@@ -73,26 +72,25 @@ func (c *Character) canCast(spell string) bool {
 	return c.TestMode || c.Mana >= spells[spell].Cost
 }
 
-// ----------------------------------------------------------------- lignées
+// ----------------------------------------------------------------- classes
 
-// Class décrit une lignée jouable et sa progression par niveau.
+// Class décrit une classe jouable et sa progression par niveau.
 type Class struct {
-	Name       string
-	MaxHP      int
-	Mana       int
-	Initiative int
-	Spell      string
-	Summary    string
-	Color      string
-	Portrait   string
-	HPGain     int
-	ManaGain   int
+	Name     string
+	MaxHP    int
+	Mana     int
+	Spell    string
+	Summary  string
+	Color    string
+	Portrait string
+	HPGain   int
+	ManaGain int
 }
 
 var classes = []Class{
-	{"Humain", 100, 40, 10, SpellSecondWind, "Polyvalent, se soigne", Sky, artHuman, 10, 5},
-	{"Elfe", 80, 60, 14, SpellSilverArrow, "Rapide, magicien", Green, artElf, 6, 8},
-	{"Nain", 120, 30, 7, SpellStoneSkin, "Un roc, encaisse tout", Orange, artDwarf, 12, 3},
+	{"Humain", 100, 40, SpellSecondWind, "Polyvalent, se soigne", Sky, artHuman, 10, 5},
+	{"Elfe", 80, 60, SpellSilverArrow, "Magie et flèches", Green, artElf, 6, 8},
+	{"Nain", 120, 30, SpellStoneSkin, "Un mur, mais barbu", Orange, artDwarf, 12, 3},
 }
 
 func classOf(name string) Class {
@@ -116,7 +114,6 @@ func newCharacter(name string, class Class) *Character {
 		MaxMana:      class.Mana,
 		Mana:         class.Mana,
 		Attack:       5,
-		Initiative:   class.Initiative,
 		XPMax:        50,
 		Gold:         50,
 		Skills:       []string{SpellPunch, class.Spell},
@@ -127,14 +124,14 @@ func newCharacter(name string, class Class) *Character {
 
 func characterCreation() *Character {
 	clearScreen()
-	banner("REGISTRE DES AVENTURIERS", Gold)
+	banner("NOUVEAU HÉROS", Gold)
 	fmt.Println()
-	say("L'intendant", Gold, "Encore un fou qui veut affronter Ignarok ? Soit. Quel est votre nom ?")
+	say("Le maire", Gold, "Un volontaire contre le dragon ? Merveilleux ! Votre nom, s'il vous plaît. C'est pour… euh… la plaque commémorative.")
 	fmt.Println(DarkGray + "  (lettres uniquement, 12 maximum)" + Reset)
 
 	name := readLine()
 	for !isValidName(name) {
-		fail("Nom invalide : utilisez uniquement des lettres (12 maximum).")
+		fail("Des lettres uniquement, 12 maximum. Même les gobelins y arrivent.")
 		name = readLine()
 	}
 	name = formatName(name)
@@ -146,8 +143,8 @@ func characterCreation() *Character {
 		clearScreen()
 		printArtSlow(class.Portrait, class.Color)
 		fmt.Println()
-		fmt.Printf("  %s%s%s, %s%s%s de niveau 1. Est-ce bien vous ?\n", Bold+Gold, name, Reset, class.Color, class.Name, Reset)
-		if !ask("Confirmer la lignée") {
+		fmt.Printf("  %s%s%s, %s%s%s. Est-ce bien vous ?\n", Bold+Gold, name, Reset, class.Color, class.Name, Reset)
+		if !ask("Confirmer ?") {
 			continue
 		}
 		c := newCharacter(name, class)
@@ -162,11 +159,11 @@ func characterCreation() *Character {
 // chooseClass affiche les trois portraits côte à côte avec leurs statistiques.
 func chooseClass(name string) Class {
 	clearScreen()
-	banner("CHOISISSEZ VOTRE LIGNÉE, "+strings.ToUpper(name), Gold)
+	banner("CHOISISSEZ VOTRE CLASSE, "+strings.ToUpper(name), Gold)
 	fmt.Println()
 
 	const column = 24
-	rowColors := []string{Bold, Red, Blue, Yellow, Purple, Gray}
+	rowColors := []string{Bold, Red, Blue, Purple, Gray}
 	portraits, colors := []string{}, []string{}
 	rows := make([]string, len(rowColors))
 	for i, class := range classes {
@@ -176,7 +173,6 @@ func chooseClass(name string) Class {
 			fmt.Sprintf("[%d] %s", i+1, strings.ToUpper(class.Name)),
 			fmt.Sprintf("♥ %d PV", class.MaxHP),
 			fmt.Sprintf("♦ %d mana", class.Mana),
-			fmt.Sprintf("» Initiative %d", class.Initiative),
 			"✦ " + class.Spell,
 			"  " + class.Summary,
 		}
@@ -198,7 +194,6 @@ func chooseClass(name string) Class {
 	return classes[readChoice(1, len(classes))-1]
 }
 
-
 // Difficulty règle la puissance des monstres et les gains du joueur.
 // Les pourcentages servent à la fois au texte du menu et au calcul réel :
 // impossible que les deux se contredisent.
@@ -211,9 +206,9 @@ type Difficulty struct {
 }
 
 var difficulties = []Difficulty{
-	{"Facile", "Monstres affaiblis (-25 % de PV et d'attaque)", Green, 75, 100},
-	{"Normal", "L'aventure telle qu'elle a été pensée", Yellow, 100, 100},
-	{"Difficile", "Monstres renforcés (+30 %), mais +50 % d'XP et de Y-Coins", Red, 130, 150},
+	{"Facile", "Monstres affaiblis (-25 % de PV et d'attaque). Pas de honte.", Green, 75, 100},
+	{"Normal", "L'aventure telle qu'on l'a imaginée", Gold, 100, 100},
+	{"Difficile", "Monstres +30 %, mais +50 % d'XP et de Y-Coins. Courage.", Red, 130, 150},
 }
 
 // difficultyOf retrouve une difficulté par son nom ; Normal par défaut.
@@ -231,7 +226,7 @@ func chooseDifficulty() string {
 	banner("CHOISISSEZ LA DIFFICULTÉ", Gold)
 	fmt.Println()
 	for i, level := range difficulties {
-		option(i+1, padRight(level.Name, 12)+Gray+level.Detail+Reset, level.Color)
+		option(i+1, level.Color+padRight(level.Name, 12)+Reset+Gray+level.Detail+Reset)
 	}
 	return difficulties[readChoice(1, len(difficulties))-1].Name
 }
@@ -246,7 +241,7 @@ func activateTestMode(c *Character) {
 	c.FloorsCleared = 2
 
 	clearScreen()
-	banner("MODE TEST ACTIVÉ", Cyan)
+	banner("MODE TEST ACTIVÉ", Gold)
 	fmt.Println()
 	for _, effect := range []string{
 		"PV infinis : vous ne subissez aucun dégât",
@@ -257,6 +252,7 @@ func activateTestMode(c *Character) {
 	} {
 		info("%s", effect)
 	}
+	fmt.Println(Gray + Italic + "\n  Le dragon trouve ça un peu injuste." + Reset)
 	pause()
 }
 
@@ -281,21 +277,22 @@ func formatName(name string) string {
 // ------------------------------------------------------------------ fiche
 
 // showStatus est le bandeau compact affiché en haut de la plupart des écrans.
+// Le niveau est accolé à la barre d'XP : c'est elle qui le fait monter.
 func showStatus(c *Character) {
 	tags := ""
 	if c.TestMode {
-		tags = Cyan + Bold + "   ∞ MODE TEST" + Reset
+		tags = Gold + Bold + "   ∞ MODE TEST" + Reset
 	}
-	fmt.Println(DarkGray + "  ╭" + strings.Repeat("─", 70) + Reset)
-	fmt.Printf("  %s│%s %s%s%s %s%s niv.%d%s   %s¤ %d Y-Coins%s   %sSac %d/%d%s%s\n",
-		DarkGray, Reset, Bold+Gold, c.Name, Reset, classOf(c.Class).Color, c.Class, c.Level, Reset,
+	fmt.Println(DarkGray + "  ╭" + strings.Repeat("─", 72) + Reset)
+	fmt.Printf("  %s│%s %s%s%s · %s%s%s   %s¤ %d Y-Coins%s   %s■ Sac %d/%d%s%s\n",
+		DarkGray, Reset, Bold+Gold, c.Name, Reset, classOf(c.Class).Color, c.Class, Reset,
 		Gold, c.Gold, Reset, Gray, inventoryCount(c), c.InventoryMax, Reset, tags)
-	fmt.Printf("  %s│%s %s♥%s %s %3d/%-3d  %s♦%s %s %3d/%-3d  %s★%s %s %d/%d\n",
+	fmt.Printf("  %s│%s %s♥%s %s %3d/%-3d  %s♦%s %s %3d/%-3d  %s★ Niv.%d%s %s %d/%d\n",
 		DarkGray, Reset,
 		Red, Reset, hpBar(c.HP, c.MaxHP, 14), c.HP, c.MaxHP,
 		Blue, Reset, bar(c.Mana, c.MaxMana, 10, Blue), c.Mana, c.MaxMana,
-		Purple, Reset, bar(c.XP, c.XPMax, 10, Purple), c.XP, c.XPMax)
-	fmt.Println(DarkGray + "  ╰" + strings.Repeat("─", 70) + Reset)
+		Purple+Bold, c.Level, Reset, bar(c.XP, c.XPMax, 10, Purple), c.XP, c.XPMax)
+	fmt.Println(DarkGray + "  ╰" + strings.Repeat("─", 72) + Reset)
 }
 
 func displayInfo(c *Character) {
@@ -304,25 +301,25 @@ func displayInfo(c *Character) {
 	banner("FICHE DU HÉROS", Gold)
 	printArt(class.Portrait, class.Color, class.Color, class.Color, Silver)
 
-	section(fmt.Sprintf("%s · %s de niveau %d", c.Name, c.Class, c.Level), class.Color)
+	section(c.Name + " · " + c.Class)
 	fmt.Printf("   %s♥ PV        %s %s %d / %d\n", Red, Reset, hpBar(c.HP, c.MaxHP, 25), c.HP, c.MaxHP)
 	fmt.Printf("   %s♦ Mana      %s %s %d / %d\n", Blue, Reset, bar(c.Mana, c.MaxMana, 25, Blue), c.Mana, c.MaxMana)
-	fmt.Printf("   %s★ Expérience%s %s %d / %d\n", Purple, Reset, bar(c.XP, c.XPMax, 25, Purple), c.XP, c.XPMax)
-	fmt.Printf("   %s» Attaque   %s %d dégâts     %s» Initiative%s %d\n", Orange, Reset, c.Attack, Yellow, Reset, c.Initiative)
-	fmt.Printf("   %s¤ Bourse    %s %d Y-Coins    %s■ Sac%s %d / %d\n", Gold, Reset, c.Gold, Brown, Reset, inventoryCount(c), c.InventoryMax)
+	fmt.Printf("   %s★ Niveau %-3d%s %s %d / %d XP\n", Purple+Bold, c.Level, Reset, bar(c.XP, c.XPMax, 25, Purple), c.XP, c.XPMax)
+	fmt.Printf("   %s» Attaque   %s %d dégâts\n", Orange, Reset, c.Attack)
+	fmt.Printf("   %s¤ Bourse    %s %d Y-Coins    %s■ Sac%s %d / %d\n", Gold, Reset, c.Gold, Gray, Reset, inventoryCount(c), c.InventoryMax)
 
-	section("Équipement", Silver)
+	section("Équipement")
 	for _, slot := range equipmentSlots {
 		fmt.Printf("   %s%-7s%s %s\n", Silver, slot, Reset, equipmentLabel(c, *c.slot(slot)))
 	}
 
-	section("Sorts", Purple)
+	section("Sorts")
 	for _, name := range c.Skills {
 		spell := spells[name]
 		fmt.Printf("   %s✦ %-16s%s %s(%d mana)%s %s\n", Purple, name, Reset, Blue, spell.Cost, Reset, Gray+spell.Description+Reset)
 	}
 
-	section("Progression", Gold)
+	section("Progression")
 	fmt.Printf("   Difficulté : %s   ·   Donjon : %d / 3 étages\n", difficultyOf(c.Difficulty).Name, c.FloorsCleared)
 	fmt.Printf("   Monstres vaincus : %d   ·   Morts : %d   ·   Missions : %d / %d\n", c.Victories, c.Deaths, c.QuestsCompleted, len(quests))
 	pause()
@@ -331,11 +328,11 @@ func displayInfo(c *Character) {
 func equipmentLabel(c *Character, item string) string {
 	switch {
 	case item == "":
-		return DarkGray + "— vide —" + Reset
+		return DarkGray + "— rien, à part du courage —" + Reset
 	case isWeapon(item):
-		return fmt.Sprintf("%s%s%s%s (+%d attaque)%s", Silver, Bold, item, Orange, weaponBonus(c, item), Reset)
+		return fmt.Sprintf("%s%s%s%s (+%d attaque)%s", White, Bold, item, Orange, weaponBonus(c, item), Reset)
 	}
-	return fmt.Sprintf("%s%s%s%s (+%d PV)%s", Silver, Bold, item, Green, gear[item].HP, Reset)
+	return fmt.Sprintf("%s%s%s%s (+%d PV)%s", White, Bold, item, Red, gear[item].HP, Reset)
 }
 
 // ------------------------------------------------------------ mort et niveau
@@ -353,7 +350,7 @@ func isDead(c *Character) bool {
 	fmt.Println(Bold + White + centerText("~ "+strings.ToUpper(c.Name)+" ~", 46) + Reset)
 	fmt.Println(Gray + centerText("ci-gît un héros pressé", 46) + Reset)
 	fmt.Println()
-	typewrite(Gray, c.Name+" est tombé… mais les dieux de DunGo n'en ont pas fini avec lui.")
+	typewrite(Gray, "Les dieux de DunGo vous renvoient au camp. Ils trouvent l'histoire trop drôle pour qu'elle s'arrête là.")
 	c.HP = c.MaxHP / 2
 	success("Vous ressuscitez avec %d / %d PV.", c.HP, c.MaxHP)
 	return true
@@ -362,9 +359,7 @@ func isDead(c *Character) bool {
 // gainXP ajoute de l'expérience et fait monter de niveau autant que nécessaire.
 func gainXP(c *Character, amount int) {
 	c.XP += amount
-	fmt.Printf("  %s★ +%d XP%s  %s %d / %d\n", Purple+Bold, amount, Reset, bar(c.XP, c.XPMax, 20, Purple), c.XP, c.XPMax)
-
-	class := classOf(c.Class)
+	class, gained := classOf(c.Class), 0
 	for c.XP >= c.XPMax {
 		c.XP -= c.XPMax // l'excédent est conservé pour le niveau suivant
 		c.XPMax = c.XPMax * 3 / 2
@@ -372,14 +367,19 @@ func gainXP(c *Character, amount int) {
 		c.MaxHP += class.HPGain
 		c.MaxMana += class.ManaGain
 		c.Attack++
-		c.Initiative++
-		c.HP, c.Mana = c.MaxHP, c.MaxMana
-
-		fmt.Println()
-		printArtSlow(artLevelUp, goldColors...)
-		section(fmt.Sprintf("Vous passez niveau %d !", c.Level), Gold)
-		fmt.Printf("   %s♥ +%d PV max   %s♦ +%d mana max   %s» +1 attaque   %s» +1 initiative%s\n",
-			Red, class.HPGain, Blue, class.ManaGain, Orange, Yellow, Reset)
-		success("PV et mana entièrement restaurés !")
+		gained++
 	}
+	fmt.Printf("  %s★ +%d XP%s   %sNiv.%d%s %s %d / %d\n", Purple+Bold, amount, Reset,
+		Purple+Bold, c.Level, Reset, bar(c.XP, c.XPMax, 20, Purple), c.XP, c.XPMax)
+	if gained == 0 {
+		return
+	}
+
+	c.HP, c.Mana = c.MaxHP, c.MaxMana
+	fmt.Println()
+	printArtSlow(artLevelUp, campColors...)
+	section(fmt.Sprintf("Niveau %d !", c.Level))
+	fmt.Printf("   %s♥ +%d PV max   %s♦ +%d mana max   %s» +%d attaque%s\n",
+		Red, class.HPGain*gained, Blue, class.ManaGain*gained, Orange, gained, Reset)
+	success("PV et mana à fond. Ça fait du bien.")
 }

@@ -7,48 +7,48 @@ package main
 import (
 	"fmt"
 	"math/rand/v2"
+	"strings"
 )
 
 var tips = []string{
-	"Les loups et les corbeaux laissent souvent des ressources pour la forge.",
-	"Les fontaines du donjon rendent la moitié de vos PV et de votre mana.",
-	"Une Potion de poison lancée en combat inflige 30 dégâts au total.",
-	"Quand Ignarok inspire, le Souffle Infernal arrive au tour suivant.",
-	"Tous les 3 tours, les monstres frappent deux fois plus fort.",
-	"Une arme faite pour votre lignée donne +2 attaque en bonus.",
-	"Le tableau des missions propose des contrats bien payés. Jetez-y un œil !",
+	"Les loups et les corbeaux laissent des ressources pour la forge. Ils n'en ont plus besoin.",
+	"Les fontaines du donjon rendent la moitié de vos PV et de votre mana. Gratuitement, en plus.",
+	"La Potion de poison se jette sur l'ennemi. Pas dans votre bouche.",
+	"Quand Ignarok inspire profondément, ce n'est pas pour chanter.",
+	"Tous les 3 tours, les monstres frappent deux fois plus fort. Eux aussi savent compter.",
+	"Une arme faite pour votre classe donne +2 attaque en bonus.",
+	"Les missions paient bien. Mieux que les gobelins, en tout cas.",
 	"Second Souffle soigne aussi les saignements et les brûlures.",
-	"La Boule de Feu fait brûler l'ennemi pendant 3 tours.",
-	"Les boss ne vous laissent pas fuir. Préparez-vous avant la dernière salle !",
+	"La Boule de Feu fait brûler l'ennemi pendant 3 tours. Ça sent le grillé.",
+	"On ne fuit pas un boss. D'autres ont essayé.",
+	"Mourir coûte 20 % de vos Y-Coins. Les dieux de DunGo ne font pas crédit.",
 }
 
 // L'écran titre : chaque entrée est un simple appel de fonction.
 var titleActions = []struct {
 	Label  string
-	Color  string
 	Action func()
 }{
-	{"Nouvelle partie", Green, newGame},
-	{"Continuer", Sky, continueGame},
-	{"Comment jouer", Yellow, howToPlay},
-	{"Qui sont-ils ?", Purple, whoAreThey},
+	{"Nouvelle partie", newGame},
+	{"Continuer", continueGame},
+	{"Crédits", credits},
 }
 
-// Le menu du camp. L'ordre de la table donne les numéros affichés.
+// Le menu du camp. L'ordre de la table donne les numéros affichés : ce qu'on
+// fait le plus souvent vient en premier.
 var campActions = []struct {
 	Label  string
-	Color  string
+	Hint   string
 	Action func(*Character)
 }{
-	{"Informations du personnage", Sky, displayInfo},
-	{"Inventaire", Brown, accessInventory},
-	{"Marchand · Mordecai le Borgne", Gold, merchant},
-	{"Forgeron · Borin Poing-de-Fer", Orange, blacksmith},
-	{"Missions · Tableau du camp", Yellow, missionBoard},
-	{"Entraînement · Arène du Sergent Grol", Red, trainingFight},
-	{"Explorer le donjon", Purple, exploreDungeon},
-	{"Sauvegarder", Silver, saveAndPause},
-	{"Comment jouer", Gray, func(*Character) { howToPlay() }},
+	{"Explorer le donjon", "affronter les monstres et les boss", exploreDungeon},
+	{"Marchand", "acheter et vendre", merchant},
+	{"Forgeron", "fabriquer armes et armures", blacksmith},
+	{"Missions", "contrats de chasse bien payés", missionBoard},
+	{"Entraînement", "combat pour de faux, sans risque", trainingFight},
+	{"Inventaire", "potions et équipement", accessInventory},
+	{"Fiche du héros", "statistiques, sorts, équipement", displayInfo},
+	{"Sauvegarder", "", saveAndPause},
 }
 
 func main() {
@@ -67,13 +67,13 @@ func titleScreen() {
 	clearScreen()
 	fmt.Println()
 	printArt(artLogo, fireColors...)
-	fmt.Println(Orange + Bold + "              ~ L'ANTRE D'IGNAROK ~" + Reset)
-	fmt.Println(Gray + Italic + "     « Sous les ruines de Karak-Dûm, le Fléau Écarlate s'éveille. »" + Reset)
+	fmt.Println(Gold + Bold + "              ~ L'ANTRE D'IGNAROK ~" + Reset)
+	fmt.Println(Gray + Italic + "      Un dragon. Trois étages. Un seul héros : vous." + Reset)
 	fmt.Println()
 	for i, entry := range titleActions {
-		option(i+1, entry.Label, entry.Color)
+		option(i+1, entry.Label)
 	}
-	option(0, "Quitter", Gray)
+	back("Quitter")
 	fmt.Println("\n" + DarkGray + "   Projet RED · Ymmersion · Paco · Sofiane · Valentin · Ayman" + Reset)
 }
 
@@ -95,7 +95,7 @@ func continueGame() {
 	}
 	c, err := loadGame(slot)
 	if err != nil {
-		fail("Impossible de charger cette sauvegarde.")
+		fail("Cette sauvegarde est illisible. Un gobelin a dû la mâchouiller.")
 		pause()
 		return
 	}
@@ -104,15 +104,33 @@ func continueGame() {
 	campMenu(c)
 }
 
+// intro raconte l'histoire en trois phrases, puis montre le chemin à suivre.
 func intro(c *Character) {
 	clearScreen()
-	printArt(artCampfire, fireColors...)
+	printArt(artDragon, fireColors...)
 	banner("PROLOGUE", Gold)
 	fmt.Println()
-	typewrite(Silver, "Il y a mille ans, les nains de Karak-Dûm creusèrent trop profond et réveillèrent Ignarok, le Fléau Écarlate.")
-	typewrite(Silver, "Aujourd'hui, la montagne tremble à nouveau. Douze héros sont partis tuer le dragon. Aucun n'est revenu.")
-	typewrite(Gold+Bold, fmt.Sprintf("Vous êtes %s. Vous avez 50 Y-Coins, une potion et beaucoup trop de courage.", c.Name))
+	typewrite(Silver, "Un dragon, Ignarok, s'est installé au fond du donjon, sous la montagne.")
+	typewrite(Silver, "Depuis, il brûle les champs, mange les moutons et ronfle si fort que plus personne ne dort.")
+	typewrite(Gold+Bold, fmt.Sprintf("Le village cherche un héros. Un seul volontaire s'est présenté : vous, %s.", c.Name))
+
+	section("Votre mission")
+	showQuestMap()
+	fmt.Println()
+	paragraph(Silver, "Préparez-vous au camp, puis descendez battre le boss de chaque étage. Le dernier, c'est le dragon.")
 	pause()
+}
+
+// showQuestMap dessine le chemin du camp jusqu'au dragon, boss par boss.
+func showQuestMap() {
+	path, bosses := Gold+Bold+"   Camp"+Reset, "       "
+	for i, floor := range floors {
+		boss, _, _ := strings.Cut(bestiary[floor.Boss].Name, ",")
+		path += DarkGray + "  ──►  " + Reset + floor.Color + Bold + padRight(fmt.Sprintf("Étage %d", i+1), 8) + Reset
+		bosses += "       " + Gray + padRight(boss, 8) + Reset
+	}
+	fmt.Println(path)
+	fmt.Println(bosses)
 }
 
 // campMenu est la boucle principale d'une partie : on y revient entre
@@ -120,18 +138,18 @@ func intro(c *Character) {
 func campMenu(c *Character) {
 	for {
 		clearScreen()
-		banner("LE CAMP DE LA DERNIÈRE LUEUR", Gold)
+		banner("LE CAMP", Gold)
 		showStatus(c)
-		fmt.Println(Gray + Italic + "  Astuce : " + tips[rand.IntN(len(tips))] + Reset)
-		fmt.Println()
+		paragraph(Gray+Italic, "Astuce : "+tips[rand.IntN(len(tips))])
+		section("Que faire ?")
 		for i, entry := range campActions {
-			option(i+1, entry.Label, entry.Color)
+			optionHint(i+1, entry.Label, entry.Hint)
 		}
-		option(0, "Quitter vers l'écran titre", Gray)
+		back("Quitter la partie")
 
 		choice := readChoice(0, len(campActions))
 		if choice == 0 {
-			if ask("Sauvegarder avant de quitter ?") {
+			if ask("Sauvegarder avant de partir ?") {
 				saveGame(c)
 				wait(800)
 			}
@@ -147,62 +165,19 @@ func saveAndPause(c *Character) {
 	pause()
 }
 
-// L'aide du jeu : un tableau de sections, faciles à compléter.
-var helpSections = []struct {
-	Title string
-	Color string
-	Lines []string
-}{
-	{"Commandes", Gold, []string{
-		"Tapez le " + Gold + "numéro" + Reset + " d'une option puis " + Gold + "Entrée" + Reset + ".",
-		Gold + "0" + Reset + " permet toujours de revenir en arrière.",
-	}},
-	{"But du jeu", Red, []string{
-		"Traversez les 3 étages du donjon, battez leurs boss et terrassez " + Red + Bold + "Ignarok" + Reset + ".",
-	}},
-	{"Au camp", Orange, []string{
-		Gold + "Marchand" + Reset + " : potions, grimoire, ressources (la 1re Potion de vie est offerte).",
-		Orange + "Forgeron" + Reset + " : armures (+PV) et armes (+attaque), plus fortes pour votre lignée.",
-		Yellow + "Missions" + Reset + " : des contrats de chasse récompensés en Y-Coins et en XP.",
-		Red + "Arène" + Reset + "    : entraînement contre le gobelin, sans danger… et sans butin.",
-	}},
-	{"Dans le donjon", Purple, []string{
-		"Chaque salle cache un monstre… ou une " + Cyan + "fontaine" + Reset + ", un " + Gold + "marchand ambulant" + Reset + " ou un " + Yellow + "sphinx" + Reset + ".",
-		"La dernière salle de chaque étage contient un " + Red + Bold + "boss" + Reset + " : impossible de le fuir !",
-	}},
-	{"En combat", Red, []string{
-		"Le plus rapide (" + Yellow + "initiative" + Reset + ") joue en premier. Les monstres frappent ×2 tous les 3 tours.",
-		Red + "Saignement" + Reset + " et " + Orange + "brûlure" + Reset + " : dégâts à chaque tour.",
-		Yellow + "Étourdi" + Reset + " : vous passez votre tour. " + Purple + "Affaibli" + Reset + " : vos dégâts sont divisés par 2.",
-		Gold + "10 %" + Reset + " de chance de coup critique.",
-		"Mort : résurrection au camp et perte de 20 % des Y-Coins.",
-	}},
-}
-
-func howToPlay() {
-	clearScreen()
-	banner("COMMENT JOUER", Yellow)
-	for _, help := range helpSections {
-		section(help.Title, help.Color)
-		for _, line := range help.Lines {
-			fmt.Println("   " + line)
-		}
-	}
-	pause()
-}
-func whoAreThey() {
+func credits() {
 	authors := []struct {
 		Art    string
 		Colors []string
 	}{
 		{artPaco, fireColors},
 		{artSofiane, iceColors},
-		{artValentin, goldColors},
-		{artAyman, poisonColors},
+		{artValentin, campColors},
+		{artAyman, mossColors},
 	}
 	clearScreen()
-	banner("QUI SONT-ILS ?", Purple)
-	fmt.Println(Gray + Italic + "  Les quatre aventuriers qui ont forgé DunGo" + Reset)
+	banner("CRÉDITS", Gold)
+	fmt.Println(Gray + Italic + "  Les quatre aventuriers qui ont forgé DunGo (aucun dragon n'a été blessé)" + Reset)
 	fmt.Println()
 	for _, author := range authors {
 		printArtSlow(author.Art, author.Colors...)
@@ -215,6 +190,6 @@ func goodbye() {
 	clearScreen()
 	printArt(artCampfire, fireColors...)
 	fmt.Println()
-	typewrite(Gold+Bold, "Merci d'avoir joué à DunGo ! Le feu du camp vous attendra, aventurier.")
+	typewrite(Gold+Bold, "Merci d'avoir joué à DunGo ! Ignarok en profite pour faire une sieste.")
 	fmt.Println()
 }

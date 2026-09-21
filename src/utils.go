@@ -13,39 +13,48 @@ import (
 // Largeur de référence du terminal : les textes longs sont repliés dessus.
 const textWidth = 76
 
+// Direction artistique : « l'or du camp, la pierre du donjon ».
+//   - l'or est la couleur signature : titres, numéros des menus, Y-Coins ;
+//   - les neutres (blanc → gris foncé) portent le texte et les cadres ;
+//   - chaque statistique garde sa couleur partout : ♥ rouge, ♦ bleu, ★ violet ;
+//   - le camp est chaud (dégradé doré), chaque étage a son ambiance :
+//     mousse (étage 1), glace (étage 2), feu (étage 3).
 const (
-	Reset    = "\033[0m"
-	Bold     = "\033[1m"
-	Italic   = "\033[3m"
+	Reset  = "\033[0m"
+	Bold   = "\033[1m"
+	Italic = "\033[3m"
+
+	// Neutres
 	White    = "\033[38;5;255m"
 	Silver   = "\033[38;5;250m"
 	Gray     = "\033[38;5;244m"
 	DarkGray = "\033[38;5;238m"
-	Red      = "\033[38;5;196m"
-	DarkRed  = "\033[38;5;124m"
-	Orange   = "\033[38;5;208m"
-	Gold     = "\033[38;5;220m"
-	Yellow   = "\033[38;5;227m"
-	Green    = "\033[38;5;77m"
-	Lime     = "\033[38;5;118m"
-	Cyan     = "\033[38;5;51m"
-	Sky      = "\033[38;5;117m"
-	Blue     = "\033[38;5;33m"
-	Purple   = "\033[38;5;135m"
-	Pink     = "\033[38;5;205m"
-	Brown    = "\033[38;5;130m"
+
+	// Signature
+	Gold   = "\033[38;5;220m"
+	Yellow = "\033[38;5;227m"
+	Orange = "\033[38;5;208m"
+	Brown  = "\033[38;5;130m"
+
+	// Sens fixe : PV et danger, réussite, mana, expérience et magie
+	Red     = "\033[38;5;196m"
+	DarkRed = "\033[38;5;124m"
+	Green   = "\033[38;5;77m"
+	Lime    = "\033[38;5;118m"
+	Sky     = "\033[38;5;117m"
+	Blue    = "\033[38;5;33m"
+	Purple  = "\033[38;5;135m"
 )
 
-// Dégradés appliqués aux dessins, du haut vers le bas.
+// Dégradés appliqués aux dessins, du haut vers le bas. Il n'y en a qu'un par
+// ambiance : un dessin prend celui du lieu où il apparaît.
 var (
-	fireColors   = []string{Yellow, Gold, Orange, Orange, Red, DarkRed}
-	goldColors   = []string{White, Yellow, Gold, Gold, Orange, Brown}
-	iceColors    = []string{White, Sky, Cyan, Sky, Blue, Blue}
-	bloodColors  = []string{Pink, Red, Red, DarkRed, DarkRed, Gray}
-	poisonColors = []string{Lime, Lime, Green, Green, Green, Gray}
-	spiritColors = []string{Pink, Purple, Purple, Blue, Blue, Gray}
-	steelColors  = []string{White, Silver, Silver, Gray}
-	stoneColors  = []string{Silver, Silver, Gray, Gray}
+	campColors  = []string{White, Yellow, Gold, Gold, Orange, Brown}   // le camp et ses habitants
+	stoneColors = []string{White, Silver, Silver, Gray}                // le donjon, le métal, la mort
+	mossColors  = []string{Lime, Lime, Green, Green, Green, Gray}      // étage 1
+	iceColors   = []string{White, Sky, Sky, Blue, Blue, Gray}          // étage 2
+	fireColors  = []string{Yellow, Gold, Orange, Orange, Red, DarkRed} // étage 3 et tout ce qui brûle
+	bloodColors = []string{Red, Red, DarkRed, DarkRed, Gray}           // la défaite
 )
 
 // ------------------------------------------------------------------ saisie
@@ -68,20 +77,20 @@ func readChoice(low, high int) int {
 		if err == nil && number >= low && number <= high {
 			return number
 		}
-		fail("Choix invalide : entrez un nombre entre %d et %d.", low, high)
+		fail("Hmm ? Tapez un nombre entre %d et %d.", low, high)
 	}
 }
 
 // ask pose une question fermée et renvoie true si le joueur répond oui.
 func ask(question string) bool {
-	section(question, Gold)
-	option(1, "Oui", Green)
-	option(2, "Non", Gray)
+	section(question)
+	option(1, "Oui")
+	option(2, "Non")
 	return readChoice(1, 2) == 1
 }
 
 func pause() {
-	fmt.Print("\n" + DarkGray + Italic + "  [ Appuyez sur Entrée pour continuer ]" + Reset)
+	fmt.Print("\n" + DarkGray + Italic + "  [ Entrée pour continuer ]" + Reset)
 	scanner.Scan()
 }
 
@@ -211,6 +220,8 @@ func say(name, color, text string) {
 
 // ------------------------------------------------------------------- cadres
 
+// banner encadre le titre d'un écran : en or au camp, à la couleur de l'étage
+// dans le donjon, en rouge face à un boss.
 func banner(text, color string) {
 	width := utf8.RuneCountInString(text) + 6
 	line := strings.Repeat("═", width)
@@ -219,14 +230,29 @@ func banner(text, color string) {
 	fmt.Println(color + "  ╚" + line + "╝" + Reset)
 }
 
-func section(text, color string) {
+// section sépare les parties d'un écran : « ── Titre ──────── ».
+func section(text string) {
 	line := strings.Repeat("─", max(2, 50-utf8.RuneCountInString(text)))
-	fmt.Println("\n  " + color + "── " + Bold + text + Reset + color + " " + line + Reset)
+	fmt.Println("\n  " + DarkGray + "── " + Reset + Gold + Bold + text + Reset + DarkGray + " " + line + Reset)
 }
 
 // option affiche une entrée de menu « [n] libellé ».
-func option(number int, label, color string) {
-	fmt.Printf("   %s[%d]%s %s%s%s\n", Gold+Bold, number, Reset, color, label, Reset)
+func option(number int, label string) {
+	fmt.Printf("   %s[%d]%s %s\n", Gold+Bold, number, Reset, label)
+}
+
+// optionHint affiche une entrée de menu suivie d'une courte explication.
+func optionHint(number int, label, hint string) {
+	if hint == "" {
+		option(number, label)
+		return
+	}
+	option(number, padRight(label, 20)+Gray+hint+Reset)
+}
+
+// back affiche l'entrée [0], toujours en dernier : retour ou sortie.
+func back(label string) {
+	fmt.Printf("   %s[0] %s%s\n", Gray, label, Reset)
 }
 
 // itemLine affiche une ligne de liste « [n] Objet          détail ».
@@ -245,7 +271,7 @@ func fail(format string, args ...any) {
 }
 
 func info(format string, args ...any) {
-	fmt.Printf("  "+Sky+"• "+format+Reset+"\n", args...)
+	fmt.Printf("  "+Gray+"• "+Reset+Silver+format+Reset+"\n", args...)
 }
 
 func warn(format string, args ...any) {

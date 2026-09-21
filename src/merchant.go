@@ -24,20 +24,22 @@ var merchantGreetings = []string{
 	"Des potions, des grimoires, des fourrures… et zéro remboursement.",
 	"Vous allez voir le dragon ? Prenez des potions. Beaucoup de potions.",
 	"Ah, un client vivant ! Ça change des derniers.",
+	"Satisfait ou… non, en fait, pas remboursé du tout.",
 }
 
 func merchant(c *Character) {
 	greeting := merchantGreetings[rand.IntN(len(merchantGreetings))]
 	for {
 		clearScreen()
-		printArt(artMerchant, goldColors...)
-		banner("L'ÉCHOPPE DE MORDECAI LE BORGNE", Gold)
+		printArt(artMerchant, campColors...)
+		banner("LE MARCHAND", Gold)
 		say("Mordecai", Gold, greeting)
-		greeting = "Autre chose pour votre service ?"
-		fmt.Printf("\n   %s¤ Bourse : %d Y-Coins%s\n\n", Gold+Bold, c.Gold, Reset)
-		option(1, "Acheter", Green)
-		option(2, "Vendre", Orange)
-		option(0, "Retour au camp", Gray)
+		greeting = "Autre chose ? J'ai tout mon temps. Et vous, toutes vos pièces."
+		fmt.Printf("\n   %s¤ Bourse : %d Y-Coins%s\n", Gold+Bold, c.Gold, Reset)
+		section("Que faire ?")
+		optionHint(1, "Acheter", "potions, grimoire, ressources")
+		optionHint(2, "Vendre", "vider un peu votre sac")
+		back("Retour au camp")
 
 		switch readChoice(0, 2) {
 		case 0:
@@ -53,18 +55,18 @@ func merchant(c *Character) {
 func buyMenu(c *Character) {
 	for {
 		clearScreen()
-		banner("ACHETER", Green)
+		banner("ACHETER", Gold)
 		showStatus(c)
 		shown := ""
 		for i, item := range shopItems {
 			if category := itemCategory(item); category != shown {
-				section(category, itemColor(item))
+				section(category)
 				shown = category
 			}
 			itemLine(i+1, item, itemColor(item), priceTag(c, item))
 		}
 		fmt.Println()
-		option(0, "Retour", Gray)
+		back("Retour")
 
 		choice := readChoice(0, len(shopItems))
 		if choice == 0 {
@@ -79,11 +81,11 @@ func buyMenu(c *Character) {
 // priceTag affiche le prix, en vert s'il est offert, en rouge s'il est trop cher.
 func priceTag(c *Character, item string) string {
 	if item == ItemHealthPotion && !c.FreePotionTaken {
-		return Lime + Bold + "GRATUIT !" + Reset
+		return Green + Bold + "GRATUIT !" + Reset
 	}
 	color := Gold
 	if c.Gold < items[item].Price {
-		color = DarkRed
+		color = DarkGray
 	}
 	return fmt.Sprintf("%s%d Y-Coins%s", color, items[item].Price, Reset)
 }
@@ -95,8 +97,7 @@ func buyItem(c *Character, item string) {
 		price = 0 // cadeau de bienvenue
 	}
 	if c.Gold < price {
-		fail("Il vous manque %d Y-Coins.", price-c.Gold)
-		say("Mordecai", Gold, "Pas de Y-Coins, pas d'objet, l'ami !")
+		fail("Il vous manque %d Y-Coins. Mordecai ne fait pas crédit.", price-c.Gold)
 		return
 	}
 
@@ -112,12 +113,12 @@ func buyItem(c *Character, item string) {
 	c.Gold -= price
 	if free {
 		c.FreePotionTaken = true
-		success("Cadeau de bienvenue ! Vous recevez : %s", item)
+		success("Cadeau de bienvenue : %s !", item)
 		say("Mordecai", Gold, "La première est offerte. Les suivantes, beaucoup moins.")
 		return
 	}
-	printArt(artCoins, goldColors...)
-	success("Vous avez acheté : %s (-%d Y-Coins). Il vous reste %d Y-Coins.", item, price, c.Gold)
+	printArt(artCoins, campColors...)
+	success("Vous achetez : %s (-%d Y-Coins). Mordecai jubile.", item, price)
 }
 
 // sellPrice : un équipement vaut ses bonus, le reste la moitié de son prix.
@@ -131,13 +132,13 @@ func sellPrice(item string) int {
 func sellMenu(c *Character) {
 	for {
 		clearScreen()
-		banner("VENDRE", Orange)
+		banner("VENDRE", Gold)
 		showStatus(c)
 		list := showItems(c, func(item string) string {
 			return fmt.Sprintf("x%-3d %s+%d Y-Coins%s", c.Inventory[item], Gold, sellPrice(item), Reset)
 		})
 		fmt.Println()
-		option(0, "Retour", Gray)
+		back("Retour")
 
 		choice := readChoice(0, len(list))
 		if choice == 0 {
@@ -147,7 +148,7 @@ func sellMenu(c *Character) {
 		removeInventory(c, item, 1)
 		c.Gold += sellPrice(item)
 		fmt.Println()
-		success("Vous vendez %s (+%d Y-Coins).", item, sellPrice(item))
+		success("Vendu : %s (+%d Y-Coins).", item, sellPrice(item))
 		say("Mordecai", Gold, "Un prix honnête. Pour moi, surtout.")
 		pause()
 	}

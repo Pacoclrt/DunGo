@@ -33,7 +33,7 @@ type Item struct {
 var items = map[string]Item{
 	ItemHealthPotion:     {"Potions", Red, 8, true},
 	ItemManaPotion:       {"Potions", Blue, 10, true},
-	ItemPoisonPotion:     {"Potions", Lime, 15, true},
+	ItemPoisonPotion:     {"Potions", Green, 15, true},
 	ItemFireballBook:     {"Grimoires", Orange, 60, true},
 	ItemWolfFur:          {"Ressources", Brown, 10, false},
 	ItemTrollSkin:        {"Ressources", Brown, 18, false},
@@ -56,10 +56,7 @@ func itemColor(item string) string {
 	if info, ok := items[item]; ok {
 		return info.Color
 	}
-	if isWeapon(item) {
-		return Cyan
-	}
-	return Silver
+	return White
 }
 
 // ------------------------------------------------------------------ le sac
@@ -74,7 +71,7 @@ func inventoryCount(c *Character) int {
 
 func addInventory(c *Character, item string, quantity int) bool {
 	if inventoryCount(c)+quantity > c.InventoryMax {
-		fail("Votre sac est plein (%d / %d) ! Vendez ou utilisez des objets.", inventoryCount(c), c.InventoryMax)
+		fail("Votre sac est plein (%d / %d) ! Il va falloir faire du tri.", inventoryCount(c), c.InventoryMax)
 		return false
 	}
 	c.Inventory[item] += quantity
@@ -118,7 +115,7 @@ func showItems(c *Character, detail func(item string) string) []string {
 	shown := ""
 	for i, item := range list {
 		if category := itemCategory(item); category != shown {
-			section(category, itemColor(item))
+			section(category)
 			shown = category
 		}
 		itemLine(i+1, item, itemColor(item), detail(item))
@@ -129,13 +126,17 @@ func showItems(c *Character, detail func(item string) string) []string {
 func accessInventory(c *Character) {
 	for {
 		clearScreen()
-		printArt(artBag, Brown)
+		printArt(artBag, campColors...)
+		banner("INVENTAIRE", Gold)
 		showStatus(c)
 		list := showItems(c, func(item string) string {
 			return fmt.Sprintf("%sx%d%s", White, c.Inventory[item], Reset)
 		})
+		if len(list) > 0 {
+			fmt.Println("\n" + Gray + Italic + "  Choisissez un objet pour l'utiliser ou l'équiper." + Reset)
+		}
 		fmt.Println()
-		option(0, "Retour", Gray)
+		back("Retour")
 
 		choice := readChoice(0, len(list))
 		if choice == 0 {
@@ -169,7 +170,7 @@ func useItem(c *Character, m *Monster, item string) {
 			equipItem(c, item)
 			return
 		}
-		info("%s est une ressource : apportez-la à Borin, le forgeron.", item)
+		info("%s ne se mange pas. Apportez-la plutôt à Borin, le forgeron.", item)
 	}
 }
 
@@ -182,12 +183,12 @@ func drinkPotion(c *Character, item string) {
 	printArt(artPotion, itemColor(item))
 	if item == ItemHealthPotion {
 		c.HP = min(c.HP+50, c.MaxHP)
-		success("Glou glou… Une douce chaleur vous envahit.")
+		success("Glou glou… +50 PV. Goût fraise, pas mal.")
 		showHP("", c.HP, c.MaxHP)
 		return
 	}
 	c.Mana = min(c.Mana+30, c.MaxMana)
-	success("Vos veines pétillent d'énergie magique.")
+	success("Ça pétille jusque dans les oreilles : +30 mana.")
 	showMana(c.Mana, c.MaxMana)
 }
 
@@ -197,8 +198,8 @@ func drinkPoison(c *Character) {
 		fail("Vous n'avez pas de Potion de poison.")
 		return
 	}
-	printArt(artPotion, Lime)
-	warn("Vous buvez la Potion de poison… vraiment ?")
+	printArt(artPotion, Green)
+	warn("Vous buvez la Potion de poison. Audacieux. Idiot, mais audacieux.")
 	if c.TestMode {
 		info("Mode test : le poison n'a aucun effet sur vous.")
 		return
@@ -206,9 +207,9 @@ func drinkPoison(c *Character) {
 	for second := 1; second <= 3; second++ {
 		wait(1000)
 		c.HP = max(c.HP-10, 0)
-		fmt.Printf("  %sSeconde %d : le poison vous brûle ! -10 PV%s\n", Lime, second, Reset)
-		showHP("", c.HP, c.MaxHP)
+		fmt.Printf("  %sSeconde %d : ça brûle ! -10 PV%s\n", Green, second, Reset)
 	}
+	showHP("", c.HP, c.MaxHP)
 }
 
 // throwPoison : jetée sur l'ennemi, la potion ronge 30 PV en trois secondes.
@@ -217,11 +218,10 @@ func throwPoison(c *Character, m *Monster) {
 		fail("Vous n'avez pas de Potion de poison.")
 		return
 	}
-	printArt(artPotion, Lime)
+	fmt.Printf("  %sVous lancez la Potion de poison. Splash !%s\n", Green, Reset)
 	for second := 1; second <= 3; second++ {
-		wait(1000)
-		fmt.Println(Lime + "  ~ Le poison ronge l'ennemi ~" + Reset)
-		hurtMonster(c, m, 10)
+		wait(600)
+		hurtMonster(m, 10, Green+"  (poison)"+Reset)
 	}
 }
 
@@ -233,16 +233,16 @@ func learnFireball(c *Character) {
 	removeInventory(c, ItemFireballBook, 1)
 	printArt(artBook, fireColors...)
 	c.Skills = append(c.Skills, SpellFireball)
-	success("Les pages s'embrasent… Vous apprenez le sort Boule de Feu !")
+	success("Les pages prennent feu… et vous apprenez Boule de Feu ! Le livre, lui, est fichu.")
 }
 
 func upgradeInventorySlot(c *Character) bool {
 	if c.InventoryUpgrades >= 3 {
-		fail("Votre sac a déjà été agrandi 3 fois.")
+		fail("Votre sac a déjà été agrandi 3 fois. Au-delà, c'est une armoire.")
 		return false
 	}
 	c.InventoryUpgrades++
 	c.InventoryMax += 10
-	success("Votre sac peut maintenant contenir %d objets !", c.InventoryMax)
+	success("Votre sac peut maintenant contenir %d objets ! Votre dos proteste.", c.InventoryMax)
 	return true
 }
