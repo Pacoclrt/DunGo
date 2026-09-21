@@ -1,9 +1,17 @@
-// DunGo — un RPG en ligne de commande (Projet RED · Ymmersion).
+// ════════════════════════════════════════════════════════════════════════
+//   main.go · [ACCUEIL]
+//   Le point de départ du programme : l'écran titre, la nouvelle partie,
+//   « Continuer », le prologue et les crédits.
+//
+//   DunGo — un RPG en ligne de commande (Projet RED · Ymmersion).
+//   Pour lancer le jeu depuis le dossier du projet : go run ./src
+// ════════════════════════════════════════════════════════════════════════
+
 package main
 
 import "fmt"
 
-func main() {
+func main() { // [ACCUEIL] sert à afficher l'écran titre en boucle (Nouvelle partie, Continuer, Crédits) jusqu'à ce que le joueur quitte : c'est ici que le programme commence
 	for {
 		clearScreen()
 		fmt.Println()
@@ -12,11 +20,11 @@ func main() {
 		option(1, "Nouvelle partie")
 		option(2, "Continuer")
 		option(3, "Crédits")
-		back("Quitter")
+		backOption("Quitter")
 
 		switch readChoice(0, 3) {
 		case 0:
-			return
+			return // sortir de main = fermer le programme
 		case 1:
 			newGame()
 		case 2:
@@ -27,89 +35,44 @@ func main() {
 	}
 }
 
-func newGame() {
+func newGame() { // [ACCUEIL] sert à lancer une nouvelle partie : choix de l'emplacement, création du héros, prologue, puis le camp
 	slot := chooseSlot("NOUVELLE PARTIE", false)
 	if slot == 0 {
 		return
 	}
-	c := characterCreation()
-	c.SaveSlot = slot
-	intro(c)
-	campMenu(c)
+	character := createCharacter()
+	character.SaveSlot = slot
+	prologue(character)
+	campMenu(character)
 }
 
-func continueGame() {
+func continueGame() { // [ACCUEIL] sert à reprendre une partie sauvegardée : choix de l'emplacement, chargement, puis le camp
 	slot := chooseSlot("CONTINUER", true)
 	if slot == 0 {
 		return
 	}
-	c, err := loadGame(slot)
+	character, err := loadGame(slot)
 	if err != nil {
 		fail("Cette sauvegarde est illisible.")
 		pause()
 		return
 	}
-	campMenu(c)
+	campMenu(character)
 }
 
-func intro(c *Character) {
+func prologue(character *Character) { // [ACCUEIL] sert à raconter le début de l'histoire (le dragon Ignarok) à une nouvelle partie
 	clearScreen()
 	printArt(artDragon, fireColors...)
 	banner("PROLOGUE", Gold)
 	fmt.Println()
 	paragraph(Silver, "Un dragon, Ignarok, s'est installé au fond du donjon. Il brûle les champs, mange les moutons et ronfle si fort que plus personne ne dort.")
-	paragraph(Gold+Bold, "Le village cherche un héros. Un seul volontaire s'est présenté : vous, "+c.Name+".")
+	paragraph(Gold+Bold, "Le village cherche un héros. Un seul volontaire s'est présenté : vous, "+character.Name+".")
 	fmt.Println()
 	paragraph(Silver, "Traversez les 3 étages du donjon et battez leurs boss : Grukk, Mor'Vath, puis le dragon.")
 	pause()
 }
 
-// campMenu est la boucle principale d'une partie : on y revient entre deux
-// expéditions dans le donjon.
-func campMenu(c *Character) {
-	for {
-		clearScreen()
-		banner("LE CAMP", Gold)
-		showStatus(c)
-		section("Que faire ?")
-		optionHint(1, "Explorer le donjon", "affronter les monstres et les boss")
-		optionHint(2, "Marchand", "acheter et vendre")
-		optionHint(3, "Forgeron", "fabriquer armes et armures")
-		optionHint(4, "Missions", "contrats de chasse")
-		optionHint(5, "Entraînement", "combat sans risque")
-		optionHint(6, "Inventaire", "potions et équipement")
-		optionHint(7, "Fiche du héros", "statistiques et sorts")
-		option(8, "Sauvegarder")
-		back("Quitter la partie")
-
-		switch readChoice(0, 8) {
-		case 0:
-			if ask("Sauvegarder avant de partir ?") {
-				saveGame(c)
-			}
-			return
-		case 1:
-			exploreDungeon(c)
-		case 2:
-			merchant(c)
-		case 3:
-			blacksmith(c)
-		case 4:
-			missionBoard(c)
-		case 5:
-			trainingFight(c)
-		case 6:
-			accessInventory(c)
-		case 7:
-			displayInfo(c)
-		case 8:
-			saveGame(c)
-			pause()
-		}
-	}
-}
-
-func credits() {
+func credits() { // [ACCUEIL] sert à afficher les prénoms de l'équipe, chacun avec son dégradé
 	clearScreen()
 	banner("CRÉDITS", Gold)
 	fmt.Println()

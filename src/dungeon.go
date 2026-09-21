@@ -1,3 +1,10 @@
+// ════════════════════════════════════════════════════════════════════════
+//   dungeon.go · [DONJON]
+//   Les 3 étages du donjon. Un étage = une suite de salles ; la dernière
+//   salle est toujours celle du boss. Battre le boss débloque l'étage
+//   suivant, et battre le dragon (étage 3) termine l'aventure.
+// ════════════════════════════════════════════════════════════════════════
+
 package main
 
 import (
@@ -6,83 +13,95 @@ import (
 	"strings"
 )
 
-type Floor struct {
-	Name     string
-	Intro    string
-	Color    string
-	Colors   []string
-	Rooms    int      // la dernière salle est celle du boss
-	Monsters []string // clés du bestiaire
-	Boss     string
+// ════════════════════════════════════════════════════════════════════════
+//   LES ÉTAGES
+// ════════════════════════════════════════════════════════════════════════
+
+type Floor struct { // [DONJON] sert à décrire un étage : son nom, ses couleurs, son nombre de salles, ses monstres et son boss
+	Name      string
+	Intro     string   // le texte d'ambiance affiché en entrant
+	Color     string   // la couleur des titres et des noms de monstres de l'étage
+	ArtColors []string // le dégradé des dessins de l'étage
+	Rooms     int      // le nombre de salles ; la dernière est celle du boss
+	Monsters  []string // les clés des monstres qui peuvent apparaître (bestiary)
+	Boss      string   // la clé du boss (bestiary)
 }
 
-var floors = []Floor{
+var floors = []Floor{ // [DONJON] sert à lister les 3 étages, dans l'ordre
 	{
-		Name:     "Étage 1 · Les Galeries Gobelines",
-		Intro:    "Des tunnels qui sentent la chaussette. Un panneau gobelin : « HUMAINS DEHORS. SAUF SI HUMAINS DONNER Y-COINS. »",
-		Color:    Green,
-		Colors:   mossColors,
-		Rooms:    5,
-		Monsters: []string{"goblin", "wolf", "raven", "boar"},
-		Boss:     "goblin_king",
+		Name:      "Étage 1 · Les Galeries Gobelines",
+		Intro:     "Des tunnels qui sentent la chaussette. Un panneau gobelin : « HUMAINS DEHORS. SAUF SI HUMAINS DONNER Y-COINS. »",
+		Color:     Green,
+		ArtColors: mossColors,
+		Rooms:     5,
+		Monsters:  []string{"goblin", "wolf", "raven", "boar"},
+		Boss:      "goblin_king",
 	},
 	{
-		Name:     "Étage 2 · Les Cryptes Englouties",
-		Intro:    "Des cryptes inondées et des squelettes qui claquent des dents. Quelque part, une liche compte son mana.",
-		Color:    Sky,
-		Colors:   iceColors,
-		Rooms:    6,
-		Monsters: []string{"skeleton", "troll", "boar", "raven"},
-		Boss:     "lich",
+		Name:      "Étage 2 · Les Cryptes Englouties",
+		Intro:     "Des cryptes inondées et des squelettes qui claquent des dents. Quelque part, une liche compte son mana.",
+		Color:     Sky,
+		ArtColors: iceColors,
+		Rooms:     6,
+		Monsters:  []string{"skeleton", "troll", "boar", "raven"},
+		Boss:      "lich",
 	},
 	{
-		Name:     "Étage 3 · L'Antre d'Ignarok",
-		Intro:    "Il fait chaud. Très chaud. Au fond, quelque chose ronfle : c'est Ignarok.",
-		Color:    Orange,
-		Colors:   fireColors,
-		Rooms:    5,
-		Monsters: []string{"krokmou", "troll", "skeleton"},
-		Boss:     "dragon",
+		Name:      "Étage 3 · L'Antre d'Ignarok",
+		Intro:     "Il fait chaud. Très chaud. Au fond, quelque chose ronfle : c'est Ignarok.",
+		Color:     Orange,
+		ArtColors: fireColors,
+		Rooms:     5,
+		Monsters:  []string{"krokmou", "troll", "skeleton"},
+		Boss:      "dragon",
 	},
 }
 
-// exploreDungeon affiche les étages. FloorsCleared dit combien d'étages
-// le héros a déjà terminés : les suivants sont verrouillés.
-func exploreDungeon(c *Character) {
+// ════════════════════════════════════════════════════════════════════════
+//   LE CHOIX DE L'ÉTAGE
+// ════════════════════════════════════════════════════════════════════════
+
+func dungeonMenu(character *Character) { // [DONJON] sert à afficher les 3 étages (terminé, en cours ou verrouillé) et à entrer dans celui choisi
 	clearScreen()
 	printArt(artDungeonGate, stoneColors...)
 	banner("LE DONJON", Gold)
-	showStatus(c)
+	showCharacterBar(character)
 	section("Où aller ?")
 
-	for i, floor := range floors {
+	// FloorsCleared suffit à tout savoir : les étages avant lui sont
+	// terminés, celui à sa place est le prochain, ceux d'après sont fermés.
+	// Ex : FloorsCleared = 1 → étage 1 terminé, étage 2 ouvert, étage 3 verrouillé.
+	for index, floor := range floors {
 		status := DarkGray + "verrouillé" + Reset
-		if i < c.FloorsCleared {
+		if index < character.FloorsCleared {
 			status = Green + "√ terminé" + Reset
 		}
-		if i == c.FloorsCleared {
+		if index == character.FloorsCleared {
 			status = Gold + "► boss : " + bestiary[floor.Boss].Name + Reset
 		}
-		option(i+1, padRight(floor.Name, 34)+" "+status)
+		option(index+1, padRight(floor.Name, 34)+" "+status)
 	}
-	back("Retour au camp")
+	backOption("Retour au camp")
 
 	choice := readChoice(0, len(floors))
 	if choice == 0 {
 		return
 	}
-	if choice-1 > c.FloorsCleared {
-		fail("Terminez d'abord l'étage %d !", c.FloorsCleared+1)
+	floorIndex := choice - 1 // le joueur tape 1 à 3, la liste commence à 0
+	if floorIndex > character.FloorsCleared {
+		fail("Terminez d'abord l'étage %d !", character.FloorsCleared+1)
 		pause()
 		return
 	}
-	exploreFloor(c, choice-1)
+	exploreFloor(character, floorIndex)
 }
 
-// exploreFloor enchaîne les salles d'un étage. Si le héros fuit, meurt ou
-// remonte au camp, il devra recommencer l'étage depuis la première salle.
-func exploreFloor(c *Character, index int) {
-	floor := floors[index]
+// ════════════════════════════════════════════════════════════════════════
+//   L'EXPLORATION D'UN ÉTAGE
+// ════════════════════════════════════════════════════════════════════════
+
+func exploreFloor(character *Character, floorIndex int) { // [DONJON] sert à enchaîner les salles d'un étage jusqu'au boss ; fuir, mourir ou remonter au camp oblige à recommencer l'étage
+	floor := floors[floorIndex]
 	clearScreen()
 	banner(floor.Name, floor.Color)
 	fmt.Println()
@@ -92,143 +111,108 @@ func exploreFloor(c *Character, index int) {
 	for room := 1; room <= floor.Rooms; room++ {
 		isBossRoom := room == floor.Rooms
 
-		// 15 % des salles ordinaires cachent le sphinx à la place d'un monstre.
+		// 1. 15 % des salles ordinaires cachent le sphinx à la place du
+		//    monstre. Bonne réponse = pas de combat dans cette salle.
 		sphinxSolved := false
 		if !isBossRoom && rand.IntN(100) < 15 {
-			sphinxSolved = riddleEvent(c, floor, index)
+			sphinxSolved = sphinxRiddle(character, floor, floorIndex)
 		}
 
+		// 2. Le combat de la salle (sauf si le sphinx a été vaincu)
 		if !sphinxSolved {
-			won := roomFight(c, floor, room)
+			won := roomFight(character, floor, room)
 			if !won {
-				return
+				return // fuite ou mort : retour au camp, l'étage est à refaire
 			}
 		}
 
+		// 3. Entre deux salles, le joueur peut remonter au camp
 		if !isBossRoom {
-			goOn := nextRoom(c, floor, room)
+			goOn := askNextRoom(character, floor, room)
 			if !goOn {
 				return
 			}
 		}
 	}
 
-	c.FloorsCleared = max(c.FloorsCleared, index+1)
+	// 4. Le boss est vaincu. L'étage suivant se débloque, mais seulement la
+	//    première fois (refaire l'étage 1 plus tard ne débloque rien de plus).
+	firstTime := floorIndex == character.FloorsCleared
+	if firstTime {
+		character.FloorsCleared++
+	}
 	if floor.Boss == "dragon" {
-		victoryScreen(c)
+		victoryScreen(character)
 		return
 	}
 	clearScreen()
 	printArt(artTrophy, campColors...)
-	banner(fmt.Sprintf("ÉTAGE %d TERMINÉ !", index+1), Gold)
-	success("Boss vaincu ! L'étage %d est débloqué.", index+2)
+	banner(fmt.Sprintf("ÉTAGE %d TERMINÉ !", floorIndex+1), Gold)
+	if firstTime {
+		success("Boss vaincu ! L'étage %d est débloqué.", floorIndex+2)
+	} else {
+		success("Boss vaincu, encore une fois !")
+	}
 	pause()
 }
 
-// roomFight fait apparaître le monstre de la salle. Renvoie true si le héros gagne.
-func roomFight(c *Character, floor Floor, room int) bool {
+func roomFight(character *Character, floor Floor, room int) bool { // [DONJON] sert à faire apparaître le monstre de la salle (le boss dans la dernière) et à lancer le combat ; renvoie true si le héros gagne
+	// 1. Quel monstre ? Un au hasard parmi ceux de l'étage, ou le boss.
 	isBossRoom := room == floor.Rooms
-	kind := floor.Monsters[rand.IntN(len(floor.Monsters))]
+	key := floor.Monsters[rand.IntN(len(floor.Monsters))]
 	if isBossRoom {
-		kind = floor.Boss
+		key = floor.Boss
 	}
-	m := newMonster(kind, c.Difficulty)
-	m.Color = floor.Color
-	m.Colors = floor.Colors
+	monster := newMonster(key, character.Difficulty)
+	monster.Color = floor.Color // le monstre prend les couleurs de l'étage
+	monster.ArtColors = floor.ArtColors
 
+	// 2. L'apparition
 	clearScreen()
 	if isBossRoom {
-		banner("☠ BOSS : "+strings.ToUpper(m.Name)+" ☠", Red)
+		banner("☠ BOSS : "+strings.ToUpper(monster.Name)+" ☠", Red)
 	} else {
 		banner(fmt.Sprintf("%s · Salle %d / %d", floor.Name, room, floor.Rooms), floor.Color)
 	}
 	fmt.Println()
-	printArt(m.Art, m.Colors...)
+	printArt(monster.Art, monster.ArtColors...)
 	fmt.Println()
-	fmt.Printf("  %s%s surgit !%s  %s♥ %d PV · » %d attaque%s\n", Bold+m.Color, m.Name, Reset, Gray, m.MaxHP, m.Attack, Reset)
-	say(m.Name, m.Color, m.Cry)
+	fmt.Printf("  %s%s surgit !%s  %s♥ %d PV · » %d attaque%s\n", Bold+monster.Color, monster.Name, Reset, Gray, monster.MaxHP, monster.Attack, Reset)
+	say(monster.Name, monster.Color, monster.Cry)
 	fmt.Println()
-	showStatus(c)
+	showCharacterBar(character)
+
+	// 3. Combattre ou repartir (possible même devant un boss, avant le combat)
 	option(1, "Combattre")
 	option(2, "Fuir vers le camp")
-
 	if readChoice(1, 2) == 2 {
 		return false
 	}
-	result := fight(c, m, false)
-	return result == Victory
+	return fight(character, monster, false) == Victory
 }
 
-// nextRoom demande au joueur s'il continue. Renvoie true pour continuer.
-func nextRoom(c *Character, floor Floor, room int) bool {
+func askNextRoom(character *Character, floor Floor, room int) bool { // [DONJON] sert à demander au joueur s'il continue vers la salle suivante ; renvoie true pour continuer, false pour remonter au camp
 	clearScreen()
 	banner(floor.Name, floor.Color)
 	fmt.Println()
 	success("Salle %d / %d terminée !", room, floor.Rooms)
-	showStatus(c)
+	showCharacterBar(character)
 	option(1, "Salle suivante")
 	optionHint(2, "Retour au camp", "l'étage recommencera du début")
 	return readChoice(1, 2) == 1
 }
 
-func victoryScreen(c *Character) {
+func victoryScreen(character *Character) { // [DONJON] sert à afficher l'écran de fin quand Ignarok est vaincu, avec les exploits du héros
 	clearScreen()
 	printArt(artVictory, campColors...)
 	fmt.Println()
 	printArt(artTrophy, campColors...)
 	fmt.Println()
-	paragraph(Gold, "Ignarok s'effondre dans un dernier ronflement. Le village peut enfin dormir, et votre nom est gravé sur la grande place : "+c.Name+", Terreur des Dragons.")
+	paragraph(Gold, "Ignarok s'effondre dans un dernier ronflement. Le village peut enfin dormir, et votre nom est gravé sur la grande place : "+character.Name+", Terreur des Dragons.")
 
 	section("Vos exploits")
-	fmt.Printf("   Niveau atteint     %d\n", c.Level)
-	fmt.Printf("   Monstres vaincus   %d\n", c.Victories)
-	fmt.Printf("   Morts              %d\n", c.Deaths)
+	fmt.Printf("   Niveau atteint     %d\n", character.Level)
+	fmt.Printf("   Monstres vaincus   %d\n", character.Victories)
+	fmt.Printf("   Morts              %d\n", character.Deaths)
 	pause()
-}
-
-type Riddle struct {
-	Question string
-	Answers  []string
-	Correct  int // numéro de la bonne réponse : 1, 2 ou 3
-}
-
-var riddles = []Riddle{
-	{"Combien de pattes a une araignée ?", []string{"Six", "Huit", "Dix"}, 2},
-	{"Je tombe du ciel en hiver et je suis toute blanche. Qui suis-je ?", []string{"La neige", "La pluie", "Le sable"}, 1},
-	{"Quel animal crache du feu ?", []string{"Le loup", "Le corbeau", "Le dragon"}, 3},
-	{"Combien de jours y a-t-il dans une semaine ?", []string{"Cinq", "Sept", "Dix"}, 2},
-	{"Qu'est-ce qui a des dents mais ne mord jamais ?", []string{"Un peigne", "Un loup", "Un gobelin"}, 1},
-	{"Quelle potion faut-il boire pour regagner des PV ?", []string{"La Potion de poison", "La Potion de mana", "La Potion de vie"}, 3},
-}
-
-// riddleEvent pose une énigme. Renvoie true si la réponse est bonne.
-func riddleEvent(c *Character, floor Floor, index int) bool {
-	riddle := riddles[rand.IntN(len(riddles))]
-	clearScreen()
-	printArt(artSphinx, floor.Colors...)
-	banner("LE SPHINX", floor.Color)
-	say("Le Sphinx", floor.Color, "Réponds à mon énigme, voyageur. Une erreur… et tu le regretteras.")
-	fmt.Println()
-	paragraph(Bold, riddle.Question)
-	fmt.Println()
-	for i, answer := range riddle.Answers {
-		option(i+1, answer)
-	}
-
-	answer := readChoice(1, len(riddle.Answers))
-	fmt.Println()
-	if answer != riddle.Correct {
-		fail("Raté ! La bonne réponse était : %s", riddle.Answers[riddle.Correct-1])
-		say("Le Sphinx", floor.Color, "Hé hé hé… Un ami monstre veut te dire bonjour.")
-		pause()
-		return false
-	}
-
-	reward := 15 * (index + 1)
-	c.Gold += reward
-	printArt(artCoins, campColors...)
-	success("Bonne réponse ! Le sphinx vous laisse passer avec %d Y-Coins.", reward)
-	gainXP(c, 10*(index+1))
-	pause()
-	return true
 }
